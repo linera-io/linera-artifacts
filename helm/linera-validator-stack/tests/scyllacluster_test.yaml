@@ -1,0 +1,70 @@
+suite: scyllacluster
+templates:
+  - scyllacluster.yaml
+release:
+  name: rel
+tests:
+  - it: renders ScyllaCluster CR with defaults
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ScyllaCluster
+      - equal:
+          path: apiVersion
+          value: scylla.scylladb.com/v1
+      - equal:
+          path: spec.datacenter.racks[0].scyllaConfig
+          value: scylla-config
+
+  - it: skips ScyllaCluster when scylla.enabled is false
+    set:
+      scylla.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: scales rack members
+    set:
+      scylla.rack.members: 5
+    asserts:
+      - equal:
+          path: spec.datacenter.racks[0].members
+          value: 5
+
+  - it: emits backups stanza when enabled
+    set:
+      scylla.backups.enabled: true
+      scylla.backups.location: gcs:my-bucket
+    asserts:
+      - exists:
+          path: spec.backups
+      - equal:
+          path: spec.backups[0].location[0]
+          value: gcs:my-bucket
+
+  - it: omits backups when disabled (default)
+    asserts:
+      - notExists:
+          path: spec.backups
+
+  - it: omits developerMode when not enabled (default)
+    asserts:
+      - notExists:
+          path: spec.developerMode
+
+  - it: emits developerMode true when enabled
+    set:
+      scylla.developerMode: true
+    asserts:
+      - equal:
+          path: spec.developerMode
+          value: true
+
+  - it: requires backups.location when enabled
+    set:
+      scylla.backups.enabled: true
+      scylla.backups.location: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: ".Values.scylla.backups.location is required when backups.enabled is true"

@@ -1,0 +1,70 @@
+# OVH managed Kubernetes (or any bare-metal cluster). nginx ingress
+# for the proxy, local-path storage class for RocksDB.
+
+image:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  tag: testnet_conway_release
+
+storage:
+  uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  # OVH bare-metal pools tend to expose local NVMe — use it for the
+  # dual-storage RocksDB cache when enabled.
+  rocksdbStorageClass: local-path
+
+shards:
+  replicas: 8
+  resources:
+    requests:
+      cpu: "6"
+      memory: 40Gi
+    limits:
+      cpu: "8"
+      memory: 48Gi
+  nodeSelector:
+    nodepool: validator
+  tolerations:
+    - key: linera.io/dedicated
+      value: shards
+      effect: NoSchedule
+
+proxies:
+  replicas: 2
+  resources:
+    requests:
+      cpu: "2"
+      memory: 6Gi
+    limits:
+      cpu: "4"
+      memory: 10Gi
+
+# Legacy Ingress path — use ONLY on clusters that ship nginx-ingress
+# (or similar) and no Gateway API implementation. The Kubernetes
+# Ingress API is in maintenance mode; for new clusters prefer the
+# `gateway` block (see docs/HELM.md). Reference:
+# https://kubernetes.io/docs/concepts/services-networking/ingress/
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    # gRPC over HTTP/2 — required.
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: validator.ovh.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: validator-tls
+      hosts: [validator.ovh.example.com]
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+validator:
+  existingSecret: validator-config
+
+networkName: testnet-conway
+validatorLabel: ovh-validator-1

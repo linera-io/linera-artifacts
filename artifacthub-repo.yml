@@ -1,0 +1,21 @@
+# Artifact Hub repository metadata.
+#
+# https://artifacthub.io/docs/topics/repositories/helm-charts/#oci-based-repositories
+#
+# Claim flow:
+#   1. Publish the charts to ghcr.io/linera-io/charts/ (done by
+#      .github/workflows/release.yaml on every `v*` tag).
+#   2. Add the OCI repo on https://artifacthub.io/ under the Linera
+#      organisation.
+#   3. Artifact Hub assigns a repositoryID (UUID). Copy it into the
+#      `repositoryID` field below.
+#   4. Set `owners.email` to a public contact address (required for
+#      the "verified publisher" badge).
+#   5. Cut a new release. release.yaml publishes this file as an OCI
+#      artifact alongside the charts; Artifact Hub pulls it on the
+#      next index pass to verify ownership.
+
+repositoryID: ""  # UUID issued by Artifact Hub after step 3.
+owners:
+  - name: Linera infrastructure team
+    email: ""     # Populate before claiming ownership.

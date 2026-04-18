@@ -1,0 +1,574 @@
+# =============================================================================
+# linera-validator
+# =============================================================================
+#
+# Required before installing:
+#   1. image.repository / image.tag — point to a linera binary image
+#      (default: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+#      with the appVersion tag of this chart).
+#   2. validator.existingSecret — Kubernetes Secret containing your
+#      per-validator `serverConfig` (PRIVATE signing key, issued to you
+#      by the network operators) and `genesisConfig` (PUBLIC genesis of
+#      the network you're joining).
+# =============================================================================
+
+# -- Optional override of the chart's full name (used as resource name prefix).
+fullnameOverride: ""
+
+# -- Optional override of the chart name.
+nameOverride: ""
+
+# -- Extra labels applied to every resource produced by the chart.
+commonLabels: {}
+
+# =============================================================================
+# Container image
+# =============================================================================
+
+image:
+  # -- Image repository for the linera binaries (REQUIRED).
+  repository: ""
+  # -- Image tag. Defaults to .Chart.appVersion if empty.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+  # -- Pull secrets for private registries.
+  pullSecrets: []
+  # - name: my-registry-secret
+
+# =============================================================================
+# Logging & tracing
+# =============================================================================
+
+log:
+  # -- RUST_LOG value applied to every linera process.
+  level: info
+  # -- RUST_BACKTRACE value.
+  # "0" (default): no Rust stack traces in logs. Anyhow error chains
+  #                (`0: ..., 1: ...`) are still emitted — those are
+  #                the useful part; only the tokio runtime frames
+  #                disappear.
+  # "1":           short backtrace (file + line per frame).
+  # "full":        full symbolic backtrace. Only set this when
+  #                actively debugging — it makes routine errors
+  #                look like panics.
+  backtrace: "0"
+
+# -- OpenTelemetry OTLP endpoint. Empty = tracing disabled.
+otlpExporterEndpoint: ""
+
+# =============================================================================
+# Network ports (exposed by every shard and proxy)
+# =============================================================================
+
+ports:
+  # -- gRPC port the proxy listens on for client connections.
+  proxy: 19100
+  # -- gRPC port for shard inter-process communication.
+  shard: 19100
+  # -- gRPC port for inter-proxy communication.
+  proxyInternal: 20100
+  # -- Prometheus metrics port (every component listens here).
+  metrics: 21100
+
+# =============================================================================
+# Storage backend
+# =============================================================================
+
+storage:
+  # -- Connection string passed to --storage. Default points to a ScyllaDB
+  # cluster in the "scylla" namespace (what the linera-validator-stack
+  # umbrella chart provisions). Override for a different backend.
+  uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+
+  # -- Storage replication factor (must match the ScyllaDB cluster RF).
+  replicationFactor: 1
+
+  # -- Enable dual storage mode (RocksDB local + ScyllaDB remote).
+  # Recommended for development only.
+  dual: false
+
+  # -- RocksDB volume size per shard (only used when storage.dual is true).
+  rocksdbSize: 2Gi
+
+  # -- StorageClass for the RocksDB PVCs. Empty = cluster default.
+  rocksdbStorageClass: ""
+
+# =============================================================================
+# Validator identity (genesis + signing key)
+# =============================================================================
+
+validator:
+  # -- Genesis config JSON (public). Distributed to every validator in
+  # the same network. Inline as a string here, or use existingSecret.
+  genesisConfigData: ""
+
+  # -- Server config JSON (PRIVATE — contains the validator signing key).
+  # Inline as a string here, or use existingSecret.
+  serverConfigData: ""
+
+  # -- Use an existing Secret instead of inlining configs above.
+  # The Secret must contain two keys: "serverConfig" and "genesisConfig".
+  existingSecret: ""
+
+# -- Network identifier (used for service discovery in some optional
+# subcomponents). Free-form, e.g. "testnet-conway" or "my-network".
+networkName: ""
+
+# -- Validator label exposed to external monitoring systems. Free-form,
+# e.g. "validator-1" or "us-east-pilot".
+validatorLabel: ""
+
+# =============================================================================
+# Shards (StatefulSet)
+# =============================================================================
+
+shards:
+  # -- Number of shard replicas.
+  replicas: 4
+
+  # -- Tokio worker threads per shard. Empty = one per CPU (Tokio default).
+  serverTokioThreads: ""
+
+  # -- linera-server CLI flags. Every flag is passed as `--<kebab-case-key> <value>`
+  # and is omitted entirely when the value is null. Defaults are the values
+  # currently in use on the Linera testnet-conway validators. Override per
+  # cluster as needed.
+  cli:
+    # Storage cache (LRU) sizes — in bytes / entries / byte limits per entry.
+    storageMaxCacheSize: 1000000000
+    storageMaxCacheEntries: 500000
+    storageMaxValueEntrySize: 1000000
+    storageMaxFindKeysEntrySize: 1000000
+    storageMaxFindKeyValuesEntrySize: 1000000
+    storageMaxCacheValueSize: 500000000
+    storageMaxCacheFindKeysSize: 200000000
+    storageMaxCacheFindKeyValuesSize: 10000000
+    # In-memory caches — entry counts.
+    blobCacheSize: 1000
+    confirmedBlockCacheSize: 10000
+    liteCertificateCacheSize: 5000
+    certificateRawCacheSize: 50000
+    eventCacheSize: 20000
+    blockCacheSize: 20000
+    executionStateCacheSize: 20000
+    # -- Free-form extra arguments appended verbatim to the linera-server
+    # command line. Each entry is added on its own line.
+    extraArgs: []
+    # - --some-flag
+    # - some-value
+
+  # -- Resource requests and limits. Defaults sized from observed steady
+  # state on the testnet-conway production validators (GKE, no resource
+  # cap historically): linera-server plateaus around 6.8 GiB p50 / 8.5
+  # GiB p95 / 9.5 GiB max per shard, with bursty <0.5 cpu p95 and ~0.6
+  # cpu max. Set as Burstable QoS — req covers steady state, lim covers
+  # plateau + ~25 % headroom. Operators with very different chain
+  # workloads should override here.
+  resources:
+    requests:
+      cpu: "1"
+      memory: 8Gi
+    limits:
+      cpu: "2"
+      memory: 12Gi
+
+  # -- Pod scheduling. Default podAntiAffinity (hard, by hostname) keeps
+  # each shard on a distinct node so a single node loss takes out at
+  # most one shard. Operators on smaller clusters (fewer nodes than
+  # shard replicas) must override `affinity` here OR add more nodes,
+  # otherwise excess shards stay Pending.
+  nodeSelector: {}
+  tolerations: []
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: shards
+          topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints: []
+
+  # -- Pod priority class name.
+  priorityClassName: ""
+
+  # -- Pod-level security context.
+  podSecurityContext: {}
+  # runAsNonRoot: true
+  # runAsUser: 1000
+  # fsGroup: 1000
+
+  # -- Container-level security context.
+  securityContext: {}
+  # allowPrivilegeEscalation: false
+  # capabilities:
+  #   drop: [ALL]
+
+  # -- Probe overrides. Empty = sensible defaults baked into the template.
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
+
+  # -- Extra environment variables added to the shard container.
+  extraEnv: []
+  # - name: MY_VAR
+  #   value: "hello"
+
+  # -- Extra volumes / volume mounts (for advanced use cases).
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  # -- Pod annotations.
+  podAnnotations: {}
+
+  # -- Pod labels (in addition to the default app.kubernetes.io/* labels).
+  podLabels: {}
+
+  # -- Termination grace period in seconds.
+  terminationGracePeriodSeconds: 10
+
+# =============================================================================
+# Proxies (StatefulSet)
+# =============================================================================
+
+proxies:
+  # -- Number of proxy replicas. Default 2 + PDB minAvailable=1 below
+  # tolerates one node drain without losing client-facing traffic.
+  # Single-node clusters must set replicas: 1 and disable
+  # podDisruptionBudget.
+  replicas: 2
+
+  # -- linera-proxy CLI flags. Same conventions as shards.cli (every flag is
+  # `--<kebab-case-key> <value>`, null values are skipped). Defaults are
+  # the values currently in use on the testnet-conway validators.
+  cli:
+    storageMaxCacheSize: 1000000000
+    storageMaxCacheEntries: 500000
+    storageMaxValueEntrySize: 1000000
+    storageMaxFindKeysEntrySize: 1000000
+    storageMaxFindKeyValuesEntrySize: 1000000
+    storageMaxCacheValueSize: 500000000
+    storageMaxCacheFindKeysSize: 200000000
+    storageMaxCacheFindKeyValuesSize: 10000000
+    blobCacheSize: 1000
+    confirmedBlockCacheSize: 10000
+    liteCertificateCacheSize: 5000
+    certificateRawCacheSize: 50000
+    eventCacheSize: 20000
+    extraArgs: []
+
+  # -- Resource requests and limits. Defaults sized from observed steady
+  # state on the testnet-conway production validators (GKE, no resource
+  # cap historically): linera-proxy plateaus around 3.5 GiB p50 / 4.0
+  # GiB p95 / 5.0 GiB max per replica, with ~0.45 cpu p95 and ~0.66 cpu
+  # max. Set as Burstable QoS. Operators with very different traffic
+  # should override here.
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "2"
+      memory: 6Gi
+
+  # -- Pod scheduling. Default podAntiAffinity (hard, by hostname) keeps
+  # each proxy on a distinct node so PDB minAvailable holds during a
+  # node drain. Operators on a single-node cluster must override
+  # `affinity` here OR keep replicas: 1.
+  nodeSelector: {}
+  tolerations: []
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: proxy
+          topologyKey: kubernetes.io/hostname
+  topologySpreadConstraints: []
+
+  # -- Pod priority class name.
+  priorityClassName: ""
+
+  # -- Pod-level security context.
+  podSecurityContext: {}
+
+  # -- Container-level security context.
+  securityContext: {}
+
+  # -- Probe overrides.
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
+
+  # -- Extra environment variables.
+  extraEnv: []
+
+  # -- Extra volumes / volume mounts.
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  # -- Pod annotations and labels.
+  podAnnotations: {}
+  podLabels: {}
+
+  # -- Termination grace period in seconds.
+  terminationGracePeriodSeconds: 10
+
+  # -- External Service for client traffic.
+  service:
+    # -- Service type. ClusterIP for in-cluster only, LoadBalancer for
+    # cloud LBs, NodePort for bare-metal exposure.
+    type: ClusterIP
+    # -- Annotations on the proxy Service (e.g. cloud LB hints).
+    annotations: {}
+    # -- Optional static IP (for cloud providers that respect this).
+    loadBalancerIP: ""
+
+  # -- PodDisruptionBudget for the proxy pods. Protects against
+  # simultaneous evictions during node drains / voluntary
+  # disruptions. Set only one of `minAvailable` / `maxUnavailable`.
+  # Not created for shards by design: each shard holds a unique slice
+  # of validator state, so any voluntary disruption is a correctness
+  # risk — operators must drain shards manually.
+  podDisruptionBudget:
+    enabled: true
+    # -- Minimum proxy pods that must stay available (integer or
+    # percentage string like "50%"). Mutually exclusive with
+    # `maxUnavailable`.
+    minAvailable: 1
+    # -- Maximum proxy pods that may be unavailable at once. Leave
+    # unset when `minAvailable` is used.
+    maxUnavailable: null
+
+# =============================================================================
+# ServiceMonitor (Prometheus Operator)
+# =============================================================================
+
+serviceMonitor:
+  # -- Create a ServiceMonitor so a Prometheus Operator can scrape both
+  # shards and proxies. OPT-IN: most operators wire scraping with
+  # their own observability stack, this chart stays out of the way.
+  # Enable only if you run prometheus-operator in the same cluster.
+  enabled: false
+  # -- Extra labels on the ServiceMonitor (e.g. release: prometheus
+  # if your Prometheus selects by that label).
+  labels: {}
+  # -- Scrape interval.
+  interval: 30s
+  # -- Scrape timeout.
+  scrapeTimeout: 10s
+
+# =============================================================================
+# PrometheusRule (Prometheus Operator)
+# =============================================================================
+
+prometheusRule:
+  # -- Create a PrometheusRule with the default Linera alerts
+  # (validator down, shard restart, proxy high latency). Extend with
+  # extraRules below. OPT-IN: requires prometheus-operator + the
+  # PrometheusRule CRD installed in the cluster.
+  enabled: false
+  # -- Extra labels on the PrometheusRule (match your Prometheus's
+  # ruleSelector if it filters by label).
+  labels: {}
+  # -- Additional alert / recording rules merged into the default set.
+  extraRules: []
+  # - alert: MyCustomAlert
+  #   expr: up{...} == 0
+  #   for: 5m
+  #   labels:
+  #     severity: warning
+  #   annotations:
+  #     summary: …
+
+  # -- Pre-computed recording rules (`linera:*:rate1m` aggregates over
+  # execution, request, storage, view metrics). Useful when a local
+  # monitoring stack answers Grafana queries and you want faster
+  # long-window panels. Leave OFF when metrics are forwarded to a
+  # central backend that already does its own recording.
+  recordingRules:
+    enabled: false
+
+# =============================================================================
+# Grafana dashboards (sidecar discovery)
+# =============================================================================
+
+dashboards:
+  # -- Emit ConfigMaps labelled for the Grafana sidecar to pick up
+  # (https://github.com/grafana/helm-charts/tree/main/charts/grafana).
+  # OPT-IN: requires your Grafana install to have dashboard sidecar
+  # enabled. Most operators ship dashboards via their own GitOps,
+  # this stays out of the way by default.
+  enabled: false
+  # -- Label the Grafana sidecar searches for. Most installs use
+  # `grafana_dashboard=1`; adjust if yours differs.
+  label: grafana_dashboard
+  labelValue: "1"
+
+# =============================================================================
+# Exposing the proxy externally
+# =============================================================================
+# The proxy speaks gRPC over HTTP/2. Pick ONE method to expose it —
+# `gateway` (recommended, uses Gateway API) or `ingress` (maintenance
+# mode).
+
+ingress:
+  # -- **DEPRECATED / maintenance mode.** Create a Kubernetes Ingress.
+  # The Kubernetes project has placed the Ingress API in feature
+  # freeze and recommends Gateway API for new deployments — see
+  # <https://kubernetes.io/docs/concepts/services-networking/ingress/>.
+  # Prefer the `gateway` block below for new installs. This option is
+  # kept for operators whose clusters only ship an Ingress controller.
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  # - host: validator.example.com
+  #   paths:
+  #     - path: /
+  #       pathType: Prefix
+  tls: []
+  # - secretName: validator-tls
+  #   hosts:
+  #     - validator.example.com
+
+gateway:
+  # -- **Recommended.** Create a Gateway API Gateway + GRPCRoute.
+  # Gateway API is the Kubernetes-recommended successor to Ingress
+  # (<https://kubernetes.io/docs/concepts/services-networking/ingress/>).
+  # Requires a Gateway API implementation in the cluster — Envoy
+  # Gateway (<https://gateway.envoyproxy.io/>) is a common pick and
+  # what we test against.
+  enabled: false
+  # -- gatewayClassName (e.g. "envoy").
+  className: ""
+  # -- Hostname for the validator. external-dns can manage the
+  # corresponding DNS record from this annotation.
+  hostname: ""
+  # -- TLS Secret produced by cert-manager (or any other source).
+  tlsSecretName: ""
+  # -- Extra annotations on the Gateway resource (e.g. for external-dns
+  # / cert-manager integration).
+  annotations: {}
+
+  # -- Envoy Gateway BackendTrafficPolicy targeting the validator
+  # GRPCRoute. Bumps the upstream cluster's circuit-breaker limits and
+  # HTTP/2 stream cap so bursty browser-driven gRPC-Web traffic doesn't
+  # hit Envoy's defaults (max_connections=1024, max_pending_requests=
+  # 1024, max_requests=1024) and surface to clients as 503 with
+  # `response_flags=UO` (upstream overflow). Browsers mislabel these
+  # 503s as CORS errors because no Allow-Origin header rides on a
+  # 5xx response — without this policy a public validator looks
+  # broken from a browser when traffic spikes even though the proxy
+  # itself is healthy.
+  #
+  # Envoy Gateway only — opt-in for portability. Other Gateway API
+  # implementations need their own equivalent (e.g. Istio
+  # `DestinationRule.connectionPool`).
+  envoyBackendTrafficPolicy:
+    enabled: false
+    # Sized for a busy public validator behind a small number of proxy
+    # replicas (2-4) absorbing browser-driven gRPC-Web traffic, JS web
+    # client traffic, faucet UIs, third-party apps, and inter-validator
+    # gossip. Defaults far above what a single proxy pod can saturate
+    # so the BTP never becomes the bottleneck — let the proxy's own
+    # CPU / memory / scylla backpressure decide. Tune down only if you
+    # observe Envoy memory pressure attributable to in-flight buffers.
+    circuitBreaker:
+      # Concurrent TCP connections to the upstream cluster. Envoy keeps
+      # connections alive and multiplexes streams over each, so this
+      # rarely needs to be huge — but headroom for connection churn
+      # matters under burst.
+      maxConnections: 100000
+      # Requests waiting for an upstream slot. With multiplexing this
+      # is dominated by burst arrivals, not steady state.
+      maxPendingRequests: 100000
+      # In-flight requests across all upstream connections. Public
+      # validator under sustained load can easily push 5-figure RPS.
+      maxParallelRequests: 100000
+      # Retry budget. linera-proxy is mostly idempotent reads so
+      # retries are cheap; allow plenty for transient ScyllaDB hiccups.
+      maxParallelRetries: 10000
+      # 0 disables the per-connection request cap (HTTP/2 wants long
+      # connections multiplexed many times — capping forces churn).
+      maxRequestsPerConnection: 0
+    http2:
+      # Max concurrent gRPC streams per upstream HTTP/2 connection.
+      # Envoy's default cap (100) is the actual root cause of the
+      # 503 UO bursts even before circuit breakers fire. linera-proxy
+      # advertises u32::MAX-1 server-side; mirror that intent here
+      # with a conservative-but-very-large cap.
+      maxConcurrentStreams: 1000000
+      # Per-stream initial flow-control window. Default 64KiB chokes
+      # streams carrying larger gRPC messages (full chain certificates,
+      # event proofs). 16 MiB lets a single stream stream serialize
+      # without window-update round-trips.
+      initialStreamWindowSize: 16777216
+      # Per-connection window. Should be N * stream-window where N is
+      # the expected number of streams concurrently transferring large
+      # payloads. 64 MiB is comfortable.
+      initialConnectionWindowSize: 67108864
+
+# =============================================================================
+# RBAC and ServiceAccount
+# =============================================================================
+
+serviceAccount:
+  # -- Create a ServiceAccount.
+  create: true
+  # -- ServiceAccount name. Empty = derived from chart name.
+  name: ""
+  # -- Annotations applied to the ServiceAccount (useful for
+  # workload-identity setups).
+  annotations: {}
+
+# =============================================================================
+# NetworkPolicies
+# =============================================================================
+# OPT-IN. Only meaningful on clusters with a NetworkPolicy enforcer
+# (Calico, Cilium, kube-router, …). When enabled, emits policies that:
+#   - allow client gRPC to proxies (from `proxyIngressFrom`)
+#   - allow inter-proxy gRPC on the internal port
+#   - allow metrics scrape (from `metricsScrapeFrom`)
+#   - allow proxies → shards gRPC
+#   - allow egress to DNS and to whatever you list in `extraEgress`
+#     (your storage backend, your observability backend, etc.)
+# `defaultDeny` additionally flips the namespace to deny-by-default.
+
+networkPolicy:
+  # -- Emit NetworkPolicy resources (proxy + shards + optional
+  # default-deny). Harmless on clusters without an enforcer.
+  enabled: false
+
+  # -- Sources allowed to reach the proxy on the client port. Leave
+  # empty to allow from anywhere (public gRPC endpoint). Typical
+  # override: restrict to an ingress/gateway namespace.
+  proxyIngressFrom: []
+  # - namespaceSelector:
+  #     matchLabels:
+  #       kubernetes.io/metadata.name: gateway-system
+
+  # -- Sources allowed to scrape /metrics on proxies + shards.
+  # Common override: your Prometheus / Alloy namespace.
+  metricsScrapeFrom: []
+  # - namespaceSelector:
+  #     matchLabels:
+  #       kubernetes.io/metadata.name: monitoring
+
+  # -- Extra egress rules, appended to both proxy and shard policies.
+  # Must include at least your storage backend (ScyllaDB, RocksDB
+  # sidecar endpoint, etc.) and any observability push targets.
+  extraEgress: []
+  # - to:
+  #     - namespaceSelector:
+  #         matchLabels:
+  #           kubernetes.io/metadata.name: scylla
+  #   ports:
+  #     - protocol: TCP
+  #       port: 9042
+
+  # -- Add a deny-all NetworkPolicy that covers every pod in the
+  # release namespace. Only flip on if you've audited the other
+  # workloads in this namespace — this will break any pod that
+  # lacks an explicit allow rule.
+  defaultDeny: false

@@ -1,0 +1,53 @@
+apiVersion: v2
+name: linera-validator
+description: |
+  Linera validator core: the shards (StatefulSet) and proxies (StatefulSet)
+  that together form a single validator on the Linera network.
+
+  This chart deploys the validator workload only. Storage backend
+  (ScyllaDB) and observability stack (Prometheus, Grafana, Loki, etc.)
+  are deployed separately. See the linera-validator-stack chart for
+  an umbrella that bundles everything.
+type: application
+
+# Chart version - bump for any change to templates or default values.
+# Follows SemVer.
+version: 0.1.0
+
+# Application version - matches the supported linera binary release.
+# Bump when targeting a new linera-protocol release.
+appVersion: "0.13.0"
+
+home: https://linera.io
+sources:
+  - https://github.com/linera-io/linera-artifacts
+  - https://github.com/linera-io/linera-protocol
+icon: https://avatars.githubusercontent.com/u/107454978
+keywords:
+  - linera
+  - blockchain
+  - validator
+  - web3
+maintainers:
+  - name: Linera infrastructure team
+    url: https://github.com/linera-io
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: integration-delivery
+  artifacthub.io/operator: "false"
+  artifacthub.io/links: |
+    - name: Source
+      url: https://github.com/linera-io/linera-artifacts
+    - name: Linera protocol
+      url: https://github.com/linera-io/linera-protocol
+    - name: Documentation
+      url: https://linera.dev
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial release of the standalone validator chart.
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/linera/linera-validator-stack
+    - url: https://artifacthub.io/packages/helm/linera/linera-block-exporter
+  artifacthub.io/screenshots: |
+    - title: Linera testnet
+      url: https://linera.io/img/og.png

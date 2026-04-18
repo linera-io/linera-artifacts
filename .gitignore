@@ -1,0 +1,48 @@
+# Helm
+**/charts/
+**/Chart.lock
+*.tgz
+
+# Local secrets / generated configs
+network-config/
+*.decrypted.*
+*.local.yaml
+kubeconfig*
+
+# Docker compose runtime volumes (default {SERVICE}_DATA_DIR=./data/*).
+# Created on `docker compose up` for caddy, scylla, prometheus, loki,
+# tempo, grafana, alloy. Operators can override per-service via env.
+docker/data/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Direnv — commit .envrc itself (it only does `use flake`); ignore
+# per-user overrides and the cache dir.
+.envrc.local
+.direnv/
+
+# Nix
+result
+result-*
+
+# Release packaging output
+.release/
+
+# DevSpace cache (logs + per-user state, including freshly generated
+# validator keys + wallet under .devspace/network-config/).
+.devspace/
+
+# Per-operator working dir for ad-hoc helm values, generated keys,
+# server.json staging, etc. Never commit — contents are deployment
+# secrets or per-validator overrides.
+.work/
+
+# MkDocs — local venv bootstrapped by `make docs-serve` + strict build output.
+.docs-venv/
+site/

@@ -1,0 +1,47 @@
+suite: prometheusrule
+templates:
+  - prometheusrule.yaml
+release:
+  name: rel
+  namespace: linera
+tests:
+  - it: renders nothing by default (opt-in)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders PrometheusRule when enabled
+    set:
+      prometheusRule.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PrometheusRule
+      - equal:
+          path: metadata.name
+          value: rel-linera-validator
+      - contains:
+          path: spec.groups[0].rules
+          content:
+            alert: LineraValidatorDown
+          any: true
+
+  - it: appends extraRules group when provided
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.extraRules:
+        - alert: MyCustomAlert
+          expr: up == 0
+          for: 5m
+          labels:
+            severity: warning
+    asserts:
+      - equal:
+          path: spec.groups[1].name
+          value: linera-validator-extra
+      - contains:
+          path: spec.groups[1].rules
+          content:
+            alert: MyCustomAlert
+          any: true

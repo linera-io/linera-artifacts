@@ -1,0 +1,78 @@
+suite: configmap
+templates:
+  - configmap.yaml
+release:
+  name: rel
+set:
+  storage.uri: scylladb:tcp:scylla:9042
+  destinations:
+    - kind: Indexer
+      endpoint: indexer.svc.cluster.local
+      port: 8081
+      tls: ClearText
+tests:
+  - it: renders one TOML key per replica with matching id
+    set:
+      exporter.replicas: 3
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ConfigMap
+      - exists:
+          path: data["exporter-config-0.toml"]
+      - exists:
+          path: data["exporter-config-1.toml"]
+      - exists:
+          path: data["exporter-config-2.toml"]
+      - matchRegex:
+          path: data["exporter-config-0.toml"]
+          pattern: "id = 0"
+      - matchRegex:
+          path: data["exporter-config-1.toml"]
+          pattern: "id = 1"
+      - matchRegex:
+          path: data["exporter-config-2.toml"]
+          pattern: "id = 2"
+
+  - it: omits replicas above the configured count
+    set:
+      exporter.replicas: 1
+    asserts:
+      - exists:
+          path: data["exporter-config-0.toml"]
+      - notExists:
+          path: data["exporter-config-1.toml"]
+
+  - it: emits one [[destinations]] per destination
+    set:
+      destinations:
+        - kind: Indexer
+          endpoint: a.svc
+          port: 8081
+          tls: ClearText
+        - kind: Indexer
+          endpoint: b.svc
+          port: 8082
+          tls: Tls
+    asserts:
+      - matchRegex:
+          path: data["exporter-config-0.toml"]
+          pattern: 'endpoint = "a.svc"'
+      - matchRegex:
+          path: data["exporter-config-0.toml"]
+          pattern: 'endpoint = "b.svc"'
+      - matchRegex:
+          path: data["exporter-config-0.toml"]
+          pattern: 'tls = "Tls"'
+
+  - it: fails when destination endpoint is empty
+    set:
+      destinations:
+        - kind: Indexer
+          endpoint: ""
+          port: 8081
+          tls: ClearText
+    asserts:
+      - failedTemplate:
+          errorMessage: "destinations[].endpoint is required"

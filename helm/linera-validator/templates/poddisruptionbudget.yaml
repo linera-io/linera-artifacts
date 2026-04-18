@@ -1,0 +1,28 @@
+{{/*
+PodDisruptionBudget for proxies.
+
+Only proxies get a PDB. Shards DO NOT: each shard holds a unique
+slice of the validator's state, so any voluntary disruption of a
+shard pod (node drain, eviction) is a correctness risk. Operators
+who need to drain a node that runs a shard must do so manually
+(delete-and-wait for the StatefulSet to recreate the pod on another
+node) rather than rely on a PDB to decide for them.
+*/}}
+{{- if .Values.proxies.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+spec:
+  {{- with .Values.proxies.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  {{- with .Values.proxies.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 6 }}
+{{- end }}

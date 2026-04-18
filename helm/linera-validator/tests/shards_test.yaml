@@ -1,0 +1,138 @@
+suite: shards
+templates:
+  - shards.yaml
+release:
+  name: rel
+set:
+  image.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  image.tag: testnet_conway_release
+tests:
+  - it: renders headless Service and StatefulSet
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        isKind:
+          of: Service
+      - documentIndex: 0
+        equal:
+          path: spec.clusterIP
+          value: None
+      - documentIndex: 1
+        isKind:
+          of: StatefulSet
+      - documentIndex: 1
+        equal:
+          path: spec.replicas
+          value: 4
+      - documentIndex: 1
+        equal:
+          path: spec.podManagementPolicy
+          value: Parallel
+
+  - it: respects shards.replicas override
+    set:
+      shards.replicas: 10
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.replicas
+          value: 10
+
+  - it: omits rocksdb volume when storage.dual is false (default)
+    asserts:
+      - documentIndex: 1
+        notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: rocksdb
+
+  - it: adds rocksdb PVC and mount when storage.dual is true
+    set:
+      storage.dual: true
+      storage.rocksdbSize: 5Gi
+    asserts:
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: rocksdb
+            mountPath: /linera.db
+      - documentIndex: 1
+        equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 5Gi
+
+  - it: passes RUST_LOG to the shard container
+    set:
+      log.level: debug
+    asserts:
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUST_LOG
+            value: debug
+
+  - it: applies extraEnv to the shard container
+    set:
+      shards.extraEnv:
+        - name: MY_VAR
+          value: hello
+    asserts:
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MY_VAR
+            value: hello
+
+  - it: applies nodeSelector
+    set:
+      shards.nodeSelector:
+        node-pool: validator
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.template.spec.nodeSelector["node-pool"]
+          value: validator
+
+  - it: configures CLI flags from shards.cli
+    set:
+      shards.cli:
+        storageMaxCacheSize: 2000000000
+        blobCacheSize: 5000
+    asserts:
+      - documentIndex: 1
+        matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "--storage-max-cache-size 2000000000"
+      - documentIndex: 1
+        matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "--blob-cache-size 5000"
+
+  - it: appends extraArgs verbatim to the CLI
+    set:
+      shards.cli:
+        extraArgs:
+          - --custom-flag
+          - custom-value
+    asserts:
+      - documentIndex: 1
+        matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "--custom-flag"
+      - documentIndex: 1
+        matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "custom-value"
+
+  - it: uses existingSecret for config volume when set
+    set:
+      validator.existingSecret: my-pre-existing-secret
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.template.spec.volumes[0].secret.secretName
+          value: my-pre-existing-secret

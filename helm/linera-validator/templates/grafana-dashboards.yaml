@@ -1,0 +1,16 @@
+{{- if .Values.dashboards.enabled }}
+{{- range $path, $_ := .Files.Glob "dashboards/**.json" }}
+{{- $slug := $path | trimPrefix "dashboards/" | trimSuffix ".json" | replace "/" "-" | lower }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "linera-validator.fullname" $ }}-dashboard-{{ $slug }}
+  labels:
+    {{- include "linera-validator.labels" $ | nindent 4 }}
+    {{ $.Values.dashboards.label }}: {{ $.Values.dashboards.labelValue | quote }}
+data:
+  {{ $path | base }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}

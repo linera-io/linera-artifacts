@@ -1,0 +1,114 @@
+# GKE hands-off install with the linera-validator-stack umbrella.
+# Assumes scylla-operator is already installed (see
+# scripts/install-prereqs.sh) and the cluster has a dedicated nodepool
+# attached to local NVMe SSDs.
+#
+# Prerequisites:
+#   1. GKE nodepool with --local-ssd-count >= 1 and the matching
+#      "Local SSD CSI Driver" addon enabled.
+#   2. scripts/install-prereqs.sh has been run (scylla-operator).
+#   3. A Kubernetes Secret named `validator-config` in the target
+#      namespace with keys `serverConfig` and `genesisConfig` (see
+#      docs/HELM.md).
+#
+# Install:
+#   helm install validator-1 \
+#     oci://ghcr.io/linera-io/charts/linera-validator-stack \
+#     --namespace linera --create-namespace \
+#     -f docs/examples/gke-hands-off.yaml
+
+linera-validator:
+  image:
+    repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+    tag: testnet_conway_release
+
+  validator:
+    existingSecret: validator-config
+
+  shards:
+    replicas: 10
+    resources:
+      requests:
+        cpu: "7"
+        memory: 55Gi
+      limits:
+        cpu: "8"
+        memory: 60Gi
+    nodeSelector:
+      cloud.google.com/gke-nodepool: linera-shards
+    tolerations:
+      - key: linera.io/dedicated
+        value: shards
+        effect: NoSchedule
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: shards
+
+  proxies:
+    replicas: 3
+    resources:
+      requests:
+        cpu: "2"
+        memory: 8Gi
+      limits:
+        cpu: "4"
+        memory: 12Gi
+
+  # Gateway API + cert-manager + external-dns take care of public
+  # exposure. Requires Envoy Gateway (or another Gateway API controller)
+  # and cert-manager with a ClusterIssuer named "letsencrypt-prod".
+  gateway:
+    enabled: true
+    className: envoy
+    hostname: validator.example.com
+    tlsSecretName: validator-tls
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      external-dns.alpha.kubernetes.io/hostname: validator.example.com
+
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+
+# Optional: turn on the always-on block exporter to help the network
+# reconcile. Leave disabled until the network operators ask for it.
+linera-block-exporter:
+  enabled: false
+
+# ScyllaCluster sized for a dedicated n2d-highmem-8 nodepool backed
+# by local NVMe SSDs.
+scylla:
+  enabled: true
+  rack:
+    members: 1
+    storage:
+      capacity: 1000Gi
+      # Local NVMe via the GKE Local SSD CSI driver. Fastest option for
+      # ScyllaDB's IOPS-heavy workload.
+      storageClassName: local-ssd-resource-adapter
+    resources:
+      requests:
+        cpu: "7"
+        memory: 51Gi
+      limits:
+        cpu: "7"
+        memory: 51Gi
+    placement:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: cloud.google.com/gke-nodepool
+                  operator: In
+                  values: [linera-scylla]
+                - key: cloud.google.com/gke-local-nvme-ssd
+                  operator: Exists
+      tolerations:
+        - key: linera.io/dedicated
+          value: scylla
+          effect: NoSchedule

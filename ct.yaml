@@ -1,0 +1,14 @@
+# chart-testing configuration
+# https://github.com/helm/chart-testing
+chart-dirs:
+  - helm
+target-branch: main
+helm-extra-args: --timeout=600s
+chart-repos:
+  - bitnami=https://charts.bitnami.com/bitnami
+  - scylla=https://scylla-operator-charts.storage.googleapis.com/stable
+# Maintainers in Chart.yaml is a team (not an individual GitHub user),
+# so the per-user ownership check ct does is not applicable here.
+validate-maintainers: false
+validate-chart-schema: false
+check-version-increment: true

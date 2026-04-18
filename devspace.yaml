@@ -1,0 +1,215 @@
+version: v2beta1
+name: linera-validator-dev
+
+# =============================================================================
+# Local dev loop for the Linera validator helm chart.
+#
+# DevSpace (https://www.devspace.sh, CNCF sandbox) installs the chart
+# into a kind cluster and streams logs + port-forwards the proxy.
+#
+# Suggested entrypoint: `just dev` / `make dev`. They:
+#   1. Create the kind cluster `linera-dev` if it doesn't exist.
+#   2. `kubectl config use-context kind-linera-dev`.
+#   3. Pre-create the `linera` namespace.
+#   4. Run `devspace dev --namespace linera --no-warn`.
+#
+# DevSpace v6 (config schema v2beta1) does NOT support pinning the
+# kube context or namespace from the YAML — both are CLI/env only —
+# so the wrapper makes both choices explicit.
+#
+# Direct usage:
+#   kubectl config use-context kind-linera-dev
+#   kubectl create namespace linera
+#   devspace dev --namespace linera --no-warn
+#
+# Tear-down (chart + kind cluster):
+#   just dev-down  /  make dev-down
+# =============================================================================
+
+vars:
+  NAMESPACE:
+    value: linera
+  LINERA_IMAGE:
+    value: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  LINERA_TAG:
+    value: testnet_conway_release
+  GENESIS_URL:
+    value: https://storage.googleapis.com/linera-io-dev-public/testnet-conway/genesis.json
+
+pipelines:
+  # `devspace dev` — install + stream logs + port-forward.
+  dev: |-
+    install_prereqs
+    bootstrap_validator_secret
+    create_deployments --all
+    start_dev --all
+
+  # `devspace deploy` — install only.
+  deploy: |-
+    install_prereqs
+    bootstrap_validator_secret
+    create_deployments --all
+
+  # `devspace purge` — uninstall chart + clean namespace. The kind
+  # cluster itself is left alone (that's `just dev-down`'s job).
+  purge: |-
+    stop_dev --all
+    purge_deployments --all
+    kubectl delete namespace "${NAMESPACE}" --ignore-not-found
+    kubectl delete namespace scylla --ignore-not-found
+
+functions:
+  install_prereqs: |-
+    # scylla-operator's helm chart references cert-manager.io/v1
+    # Certificate / Issuer CRDs at install time, so cert-manager must
+    # be installed first. Pass --install-cert-manager to do both.
+    ./scripts/install-prereqs.sh --install-cert-manager
+
+  bootstrap_validator_secret: |-
+    # Generate a *real* validator identity (server.json) and a wallet
+    # (wallet.json + keystore.json + linera.db) so devs can run client
+    # commands too. Files land in .devspace/network-config/ on the host.
+    #
+    # The validator's public key is fresh, so it isn't part of the
+    # current testnet_conway committee — shards/proxy run, expose
+    # metrics, accept gRPC, but won't sign blocks the network accepts
+    # until the operators add this key. That's fine for chart dev.
+    set -eu
+    mkdir -p .devspace/network-config
+    cd .devspace/network-config
+
+    # Run the linera image as the current host UID/GID so the files
+    # land writeable by the user (kubectl reads them right after).
+    DOCKER_USER="$(id -u):$(id -g)"
+
+    # Files from previous runs may be root-owned (older devspace.yaml
+    # didn't pin --user). Reclaim them via a throwaway alpine container
+    # so we don't need sudo on the host. No-op if already owned by us.
+    docker run --rm -v "$PWD:/work" -w /work alpine \
+      chown -R "$DOCKER_USER" . 2>/dev/null || true
+
+    if [ ! -s genesis.json ]; then
+      echo "Downloading genesis from ${GENESIS_URL}"
+      curl -sSLo genesis.json "${GENESIS_URL}"
+    fi
+
+    if [ ! -s validator-config.toml ]; then
+      cat > validator-config.toml <<'TOML'
+    server_config_path = "server.json"
+    host = "validator-proxy.linera.svc.cluster.local"
+    port = 19100
+
+    [external_protocol]
+    Grpc = "ClearText"
+
+    [internal_protocol]
+    Grpc = "ClearText"
+
+    [[proxies]]
+    host = "validator-proxy.linera.svc.cluster.local"
+    public_port = 19100
+    private_port = 20100
+    metrics_port = 21100
+
+    [[shards]]
+    host = "validator-shards-0.validator-shards.linera.svc.cluster.local"
+    port = 19100
+    metrics_port = 21100
+    TOML
+    fi
+
+    if [ ! -s server.json ]; then
+      echo "Generating validator signing key (server.json) via /linera-server generate"
+      docker run --rm --user "$DOCKER_USER" -v "$PWD:/config" -w /config \
+        "${LINERA_IMAGE}:${LINERA_TAG}" \
+        /linera-server generate --validators validator-config.toml
+    fi
+
+    if [ ! -s wallet.json ]; then
+      echo "Initialising linera client wallet (wallet.json + keystore.json + linera.db)"
+      docker run --rm --user "$DOCKER_USER" -v "$PWD:/config" -w /config \
+        "${LINERA_IMAGE}:${LINERA_TAG}" \
+        /linera \
+          --wallet wallet.json \
+          --keystore keystore.json \
+          --storage rocksdb:linera.db \
+          wallet init --genesis genesis.json
+    fi
+
+    # Defensive: if a previous run created files as root, fix them so
+    # kubectl can read them now. No-op if already correct.
+    chmod -R u+rw . 2>/dev/null || true
+
+    cd - >/dev/null
+
+    # validator workload namespace + scylla CR namespace (both needed
+    # by the umbrella chart; the chart itself doesn't create them).
+    for ns in "${NAMESPACE}" scylla; do
+      kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+    done
+    kubectl --namespace "${NAMESPACE}" \
+      create secret generic validator-config \
+      --from-file=serverConfig=.devspace/network-config/server.json \
+      --from-file=genesisConfig=.devspace/network-config/genesis.json \
+      --dry-run=client -o yaml | kubectl apply -f -
+
+deployments:
+  linera-validator-stack:
+    helm:
+      chart:
+        name: ./helm/linera-validator-stack
+      values:
+        linera-validator:
+          # Short fullname so service hostnames stay readable and match
+          # the validator-config.toml the bootstrap function generates.
+          fullnameOverride: validator
+          image:
+            repository: ${LINERA_IMAGE}
+            tag: ${LINERA_TAG}
+          validator:
+            existingSecret: validator-config
+          shards:
+            replicas: 1
+          proxies:
+            replicas: 1
+          serviceMonitor:
+            enabled: false
+          prometheusRule:
+            enabled: false
+          dashboards:
+            enabled: false
+        scylla:
+          # ScyllaCluster on kind needs developerMode + relaxed
+          # resources, otherwise the cpuset / probe timing kills it.
+          developerMode: true
+          rack:
+            members: 1
+            storage:
+              capacity: 10Gi
+            resources:
+              requests:
+                cpu: "500m"
+                memory: 1Gi
+              limits:
+                cpu: "2"
+                memory: 4Gi
+
+dev:
+  proxy:
+    labelSelector:
+      app.kubernetes.io/component: proxy
+    logs:
+      enabled: true
+    ports:
+      - port: "19100"
+
+profiles:
+  # Developer building a custom linera binary: devspace will use your
+  # override instead of the public image.
+  #   export LINERA_IMAGE=localhost:5000/linera
+  #   export LINERA_TAG=dev
+  #   devspace use profile custom-image
+  #   devspace dev
+  - name: custom-image
+    description: Point at a custom-built linera image.
+    patches: []

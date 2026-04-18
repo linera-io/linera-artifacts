@@ -1,0 +1,69 @@
+# cert-manager ClusterIssuers for the Linera validator Gateway.
+#
+# The linera-validator chart's `gateway.enabled=true` path sets
+# `cert-manager.io/cluster-issuer` on the Gateway resource so
+# cert-manager provisions the Secret named in `gateway.tlsSecretName`
+# automatically.
+#
+# Pick ONE of the two issuers below and name it in your values:
+#
+#   gateway:
+#     enabled: true
+#     className: envoy
+#     hostname: validator.example.com
+#     tlsSecretName: validator-tls
+#     annotations:
+#       cert-manager.io/cluster-issuer: letsencrypt-prod
+#
+# Prerequisite: cert-manager installed (see scripts/install-prereqs.sh
+# --install-cert-manager).
+#
+# Apply with:
+#   kubectl apply -f docs/examples/cert-manager-clusterissuer.yaml
+#
+# Docs:
+#   https://cert-manager.io/docs/configuration/acme/
+#   https://cert-manager.io/docs/configuration/acme/http01/gateway-api/
+
+---
+# Staging issuer — use this first to verify the flow without hitting
+# Let's Encrypt's production rate limits. Certificates are issued by
+# Let's Encrypt's staging CA and will be flagged as untrusted by
+# browsers; only use while shaking out DNS / Gateway plumbing.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@example.com        # ← change to your operational email
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - kind: Gateway
+                name: validator
+                namespace: linera   # ← match the namespace you install the chart into
+---
+# Production issuer — real, trusted certificates. Switch to this only
+# after `letsencrypt-staging` has produced a valid cert end-to-end.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com        # ← change to your operational email
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - kind: Gateway
+                name: validator
+                namespace: linera

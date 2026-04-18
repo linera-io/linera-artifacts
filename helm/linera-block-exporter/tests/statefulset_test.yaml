@@ -1,0 +1,126 @@
+suite: statefulset
+release:
+  name: rel
+set:
+  image.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  image.tag: testnet_conway_release
+  storage.uri: scylladb:tcp:scylla:9042
+  destinations:
+    - kind: Indexer
+      endpoint: indexer.svc.cluster.local
+      port: 8081
+      tls: ClearText
+# In statefulset.yaml: doc 0 = headless Service, doc 1 = StatefulSet.
+# We scope assertions per-template so the doc index is local to the file.
+tests:
+  - it: renders headless Service and StatefulSet
+    template: statefulset.yaml
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        isKind:
+          of: Service
+      - documentIndex: 0
+        equal:
+          path: spec.clusterIP
+          value: None
+      - documentIndex: 1
+        isKind:
+          of: StatefulSet
+
+  - it: scales via exporter.replicas
+    template: statefulset.yaml
+    set:
+      exporter.replicas: 4
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.replicas
+          value: 4
+
+  - it: enables persistence when exporter.persistence.enabled
+    template: statefulset.yaml
+    set:
+      exporter.persistence.enabled: true
+      exporter.persistence.size: 5Gi
+      exporter.persistence.storageClass: ssd
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 5Gi
+      - documentIndex: 1
+        equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: ssd
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: data
+            mountPath: /data
+
+  - it: omits PVC when persistence.enabled is false
+    template: statefulset.yaml
+    set:
+      exporter.persistence.enabled: false
+    asserts:
+      - documentIndex: 1
+        notExists:
+          path: spec.volumeClaimTemplates
+      - documentIndex: 1
+        notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: data
+          any: true
+
+  - it: includes config-selector init container that copies per-ordinal TOML
+    template: statefulset.yaml
+    asserts:
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.initContainers
+          content:
+            name: config-selector
+          any: true
+
+  - it: includes one indexer-readiness init container per destination when enabled
+    template: statefulset.yaml
+    set:
+      exporter.indexerReadinessCheck.enabled: true
+      destinations:
+        - kind: Indexer
+          endpoint: a.svc
+          port: 8081
+          tls: ClearText
+        - kind: Indexer
+          endpoint: b.svc
+          port: 8082
+          tls: Tls
+    asserts:
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.initContainers
+          content:
+            name: indexer-ready-0
+          any: true
+      - documentIndex: 1
+        contains:
+          path: spec.template.spec.initContainers
+          content:
+            name: indexer-ready-1
+          any: true
+
+  - it: skips storage-check init container when disabled
+    template: statefulset.yaml
+    set:
+      exporter.storageInitCheck.enabled: false
+    asserts:
+      - documentIndex: 1
+        notContains:
+          path: spec.template.spec.initContainers
+          content:
+            name: storage-check
+          any: true

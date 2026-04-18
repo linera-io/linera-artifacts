@@ -1,0 +1,419 @@
+# =============================================================================
+# linera-validator — docker compose
+# =============================================================================
+#
+# Single-validator stack for operators who want to run a Linera validator
+# on a dedicated host (VM or bare metal) and join an existing network.
+#
+# Runs: Caddy (TLS) -> linera-proxy -> N linera-server shards -> ScyllaDB.
+# Also runs Watchtower for label-driven auto-updates and a one-shot
+# scylla-setup container that tunes host sysctls for ScyllaDB.
+#
+# Usage:
+#   1. cp .env.production.template .env
+#   2. Fill in DOMAIN, ACME_EMAIL, VALIDATOR_NAME, VALIDATOR_KEY, and
+#      (if different) GENESIS_URL.
+#   3. Put your server.json (contains the signing key) and
+#      genesis.json in this directory.
+#   4. docker compose up -d
+#
+# The scripts/deploy-validator.sh helper automates steps 1-4 for
+# new deployments. See docs/DOCKER-COMPOSE.md for the full reference.
+#
+# Optional overlays (layered with `-f`):
+#   docker-compose.observability-push.yml  → Grafana Alloy pushing
+#                                            metrics/logs/traces to a
+#                                            remote backend
+#   docker-compose.observability-local.yml → Prometheus + Grafana +
+#                                            Loki + Tempo running on
+#                                            the same host
+# =============================================================================
+
+# Default logging policy applied to every service via YAML anchor.
+# Caps each container's json-file log at ~500 MB total (5 × 100 MB) so a
+# misbehaving service can't fill the host disk. Without rotation, a
+# verbose container can grow a single json-file log into hundreds of GB
+# in days, OOM-style filling the root disk and taking the whole stack
+# down via OCI runtime errors.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+    compress: "true"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Caddy — TLS terminator + gRPC reverse proxy.
+  # Obtains Let's Encrypt certificates for $DOMAIN automatically.
+  # ---------------------------------------------------------------------------
+  web:
+    image: ${CADDY_IMAGE:-caddy:2.10.2-alpine}
+    container_name: web
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CADDY_DATA_DIR:-./data/caddy-data}:/data
+      - ${CADDY_CONFIG_DIR:-./data/caddy-config}:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WEB:-1.00}"
+          memory: ${LIMIT_MEM_WEB:-3G}
+
+  # ---------------------------------------------------------------------------
+  # scylla-setup — one-shot privileged container that tunes host-side
+  # sysctls (fs.aio-max-nr, etc.) ScyllaDB needs to start. Persists the
+  # settings to /etc/sysctl.d/99-scylladb.conf.
+  # ---------------------------------------------------------------------------
+  scylla-setup:
+    image: ubuntu:24.04
+    container_name: scylla-setup
+    privileged: true
+    logging: *default-logging
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - /etc/sysctl.d:/host/sysctl.d
+      - ./scylla-setup.sh:/setup.sh:ro
+    command: ["/bin/bash", "/setup.sh", "--persist"]
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # ScyllaDB — durable storage backend.
+  # ---------------------------------------------------------------------------
+  scylla:
+    image: ${SCYLLA_IMAGE:-scylladb/scylla:6.2.3}
+    container_name: scylla
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - ${SCYLLA_DATA_DIR:-./data/scylla}:/var/lib/scylla
+    environment:
+      SCYLLA_AUTO_CONF: 1
+    command:
+      - "--developer-mode"
+      - "${SCYLLA_DEVELOPER_MODE:-0}"
+      - "--overprovisioned"
+      - "${SCYLLA_OVERPROVISIONED:-1}"
+      # NOTE: uncomment --smp on a fresh deploy to match CPU limits.
+      # Changing it later requires a full data wipe (tablets don't
+      # support shrinking the shard count).
+      # - "--smp"
+      # - "${LIMIT_CPUS_SCYLLA:-2}"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      interval: ${SCYLLA_HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${SCYLLA_HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${SCYLLA_HEALTHCHECK_RETRIES:-20}
+      start_period: ${SCYLLA_HEALTHCHECK_START_PERIOD:-60s}
+    depends_on:
+      scylla-setup:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SCYLLA:-4.00}"
+          memory: ${LIMIT_MEM_SCYLLA:-30G}
+
+  # ---------------------------------------------------------------------------
+  # shard-init — one-shot: initialize the validator's database from
+  # genesis.json if it doesn't exist yet.
+  # ---------------------------------------------------------------------------
+  shard-init:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: shard-init
+    logging: *default-logging
+    environment:
+      - SCYLLA_PORT=${SCYLLA_PORT:-9042}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        while true; do
+          status=0
+          /linera storage check-existence --storage scylladb:tcp:scylla:$$SCYLLA_PORT || status=$$?
+          case "$$status" in
+            0)
+              echo "Database already exists, no need to initialize."
+              exit 0
+              ;;
+            1)
+              echo "Database does not exist, attempting to initialize..."
+              if /linera storage initialize \
+                   --storage scylladb:tcp:scylla:$$SCYLLA_PORT \
+                   --genesis /config/genesis.json; then
+                echo "Initialization successful."
+                exit 0
+              fi
+              echo "Initialization failed, retrying in 5 seconds..."
+              sleep 5
+              ;;
+            *)
+              echo "Unexpected status $$status, retrying in 5 seconds..."
+              sleep 5
+              ;;
+          esac
+        done
+    volumes:
+      - .:/config
+    depends_on:
+      scylla:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # proxy — single-replica linera-proxy. Caddy forwards external traffic here.
+  # ---------------------------------------------------------------------------
+  proxy:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: proxy
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${PROXY_PORT:-19100}:19100"
+    command:
+      - /linera-proxy
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - /config/server.json
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/21100' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+      scylla:
+        condition: service_healthy
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROXY:-1.50}"
+          memory: ${LIMIT_MEM_PROXY:-4G}
+
+  # ---------------------------------------------------------------------------
+  # Shards — one container per shard. Each shard must run with a unique
+  # --shard number matching the [[shards]] list in server.json.
+  # Docker Compose replicas don't support per-replica arguments, so we
+  # define separate services. Per-shard resource limits:
+  #   LIMIT_CPUS_SHARD_N / LIMIT_MEM_SHARD_N (N=0..3).
+  # ---------------------------------------------------------------------------
+  shard-0:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: docker-shard-1
+    hostname: docker-shard-1
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "0"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_0:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_0:-6G}
+
+  shard-1:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: docker-shard-2
+    hostname: docker-shard-2
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "1"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_1:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_1:-6G}
+
+  shard-2:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: docker-shard-3
+    hostname: docker-shard-3
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "2"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_2:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_2:-6G}
+
+  shard-3:
+    image: >-
+      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+    container_name: docker-shard-4
+    hostname: docker-shard-4
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "3"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_3:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_3:-6G}
+
+  # ---------------------------------------------------------------------------
+  # Watchtower — periodically polls the registry and pulls new images for
+  # any container labelled `com.centurylinklabs.watchtower.enable=true`.
+  # ---------------------------------------------------------------------------
+  watchtower:
+    image: ${WATCHTOWER_IMAGE:-nickfedor/watchtower:1.15.0}
+    container_name: watchtower
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--interval", "${WATCHTOWER_INTERVAL:-30}"]
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_WATCHTOWER:-0.25}"
+          memory: ${LIMIT_MEM_WATCHTOWER:-256M}
+
+# All durable state is bind-mounted so backups use your usual file-level
+# tooling (rsync, borgmatic, snapshots, etc.). Each service has its own
+# env var so you can put the heavy ones on dedicated disks:
+#
+#   SCYLLA_DATA_DIR         default ./data/scylla
+#   CADDY_DATA_DIR          default ./data/caddy-data
+#   CADDY_CONFIG_DIR        default ./data/caddy-config
+#   (observability overlays add PROMETHEUS_DATA_DIR, GRAFANA_DATA_DIR,
+#    LOKI_DATA_DIR, TEMPO_DATA_DIR, ALLOY_DATA_DIR)
+#
+# Override in .env to point at a dedicated disk, e.g.
+# SCYLLA_DATA_DIR=/mnt/scylla-ssd. docker compose creates the
+# directory on first start if it doesn't exist.

@@ -1,0 +1,213 @@
+# Optional full local observability stack — opt-in, heavy.
+#
+# Most validators DO NOT run this. It brings every observability
+# tool on-box (Alloy + cAdvisor + Prometheus + Loki + Tempo +
+# Grafana with pre-provisioned dashboards). It's kept here for
+# operators who want a self-contained validator + dashboard on a
+# single beefy host and don't want to run a separate observability
+# cluster. In practice almost no one uses it — most operators either
+# go without observability or scrape the validator's /metrics
+# endpoint with their own external Prometheus.
+#
+# Brings up:
+#   - cAdvisor  — container-level metrics
+#   - Alloy     — scrapes everything, writes to local Prometheus/Loki/
+#                 Tempo, and (if configured via the *_OTLP_URL /
+#                 *_PUSH_URL env vars) ALSO pushes to a remote backend
+#   - Prometheus — on-box metrics storage with alert rules loaded
+#                  from ./alerts.rules.yml
+#   - Grafana    — dashboards pre-provisioned from ./dashboards/
+#   - Loki       — on-box log storage
+#   - Tempo      — on-box trace storage
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.local-monitoring.yml \
+#     up -d
+#
+# For just the Alloy push-only forwarder (no local storage), layer
+# docker-compose.alloy.yml instead.
+#
+# Any data directory can be moved with its own *_DATA_DIR env var
+# (see .env.production.template). All state is bind-mounted so backups
+# are file-level.
+
+# YAML anchors are file-local — overlays must redeclare. See
+# docker-compose.yml header for context (logs caused 506 GB outage).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+    compress: "true"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # cAdvisor — per-container resource metrics (CPU, memory, I/O).
+  # ---------------------------------------------------------------------------
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.51.0}
+    container_name: cadvisor
+    restart: unless-stopped
+    logging: *default-logging
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      - "--housekeeping_interval=15s"
+      - "--docker_only=true"
+      # disk + diskIO kept enabled — needed for container_fs_*
+      # (single-container disk hog detection, ref incident 2026-04-29).
+      - "--disable_metrics=percpu,sched,tcp,udp,hugetlb,referenced_memory,advtcp,process,resctrl"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_CADVISOR:-0.50}"
+          memory: ${LIMIT_MEM_CADVISOR:-256M}
+
+  # ---------------------------------------------------------------------------
+  # Alloy — scrape all Linera services + cAdvisor, fan out to
+  # local Prometheus/Loki/Tempo and (if set) to remote OTLP.
+  # ---------------------------------------------------------------------------
+  alloy:
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.5.0}
+    container_name: alloy
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "12345:12345"   # Alloy's own metrics / UI
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+    volumes:
+      - ./alloy-config.river:/etc/alloy/config.river:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host paths for the built-in unix exporter (= node_exporter).
+      # Read-only; rslave keeps the bind in sync if the host mount
+      # tree changes (new disks, etc.).
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    pid: host
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "/etc/alloy/config.river"
+    environment:
+      - HOSTNAME=${HOSTNAME:-validator}
+      # Remote OTLP push (optional). Defaults point at the local
+      # stack, so if you leave them empty the data stays on-box.
+      - PROMETHEUS_OTLP_URL=${PROMETHEUS_OTLP_URL:-http://prometheus:9090/api/v1/otlp/v1/metrics}
+      - PROMETHEUS_OTLP_USER=${PROMETHEUS_OTLP_USER:-}
+      - PROMETHEUS_OTLP_PASS=${PROMETHEUS_OTLP_PASS:-}
+      - LOKI_PUSH_URL=${LOKI_PUSH_URL:-http://loki:3100/loki/api/v1/push}
+      - LOKI_PUSH_USER=${LOKI_PUSH_USER:-}
+      - LOKI_PUSH_PASS=${LOKI_PUSH_PASS:-}
+      - TEMPO_OTLP_URL=${TEMPO_OTLP_URL:-http://tempo:4318}
+      - TEMPO_OTLP_USER=${TEMPO_OTLP_USER:-}
+      - TEMPO_OTLP_PASS=${TEMPO_OTLP_PASS:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      - proxy
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_ALLOY:-0.50}"
+          memory: ${LIMIT_MEM_ALLOY:-1G}
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — local metrics storage + alert rules.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
+    container_name: prometheus
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-otlp-receiver
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.rules.yml:/etc/prometheus/alerts.rules.yml:ro
+      - ${PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_PROMETHEUS:-0.50}"
+          memory: ${LIMIT_MEM_PROMETHEUS:-512M}
+
+  # ---------------------------------------------------------------------------
+  # Loki — log storage.
+  # ---------------------------------------------------------------------------
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:3.3.0}
+    container_name: loki
+    restart: unless-stopped
+    logging: *default-logging
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ${LOKI_DATA_DIR:-./data/loki}:/loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_LOKI:-0.50}"
+          memory: ${LIMIT_MEM_LOKI:-1G}
+
+  # ---------------------------------------------------------------------------
+  # Tempo — trace storage.
+  # ---------------------------------------------------------------------------
+  tempo:
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.6.1}
+    container_name: tempo
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["-config.file=/etc/tempo/tempo-config.yml"]
+    volumes:
+      - ./tempo-config.yml:/etc/tempo/tempo-config.yml:ro
+      - ${TEMPO_DATA_DIR:-./data/tempo}:/var/tempo
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_TEMPO:-0.50}"
+          memory: ${LIMIT_MEM_TEMPO:-1G}
+
+  # ---------------------------------------------------------------------------
+  # Grafana — dashboards.
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.4.0}
+    container_name: grafana
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ${GRAFANA_DATA_DIR:-./data/grafana}:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_GRAFANA:-0.50}"
+          memory: ${LIMIT_MEM_GRAFANA:-1G}

@@ -1,0 +1,64 @@
+{{- if .Values.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "linera-validator.fullname" . }}
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: linera-validator
+      interval: 30s
+      rules:
+        - alert: LineraValidatorDown
+          expr: up{job=~".*linera-validator.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: "{{`{{ $labels.job }}`}}"
+          annotations:
+            summary: "Linera {{`{{ $labels.job }}`}} is down on {{`{{ $labels.instance }}`}}"
+            description: |
+              Prometheus has been unable to scrape {{`{{ $labels.instance }}`}}
+              for more than 2 minutes. Either the pod crashed or the
+              in-cluster network is broken.
+
+        - alert: LineraShardRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}",pod=~".*-shards-.*"}[15m]) > 2
+          for: 0m
+          labels:
+            severity: warning
+            component: shard
+          annotations:
+            summary: "Shard {{`{{ $labels.pod }}`}} restarted > 2 times in 15m"
+            description: |
+              A shard pod restarted more than twice in the last 15
+              minutes. Single restarts are harmless, repeated ones
+              indicate a deeper problem.
+
+        - alert: LineraProxyHighLatency
+          expr: |
+            histogram_quantile(
+              0.99,
+              rate(linera_proxy_grpc_duration_seconds_bucket{namespace="{{ .Release.Namespace }}"}[5m])
+            ) > 2
+          for: 10m
+          labels:
+            severity: warning
+            component: proxy
+          annotations:
+            summary: "Proxy p99 gRPC latency > 2s"
+            description: |
+              The proxy's p99 gRPC latency has exceeded 2 seconds for
+              10 minutes. Clients are likely seeing degraded response
+              times.
+
+    {{- with .Values.prometheusRule.extraRules }}
+    - name: linera-validator-extra
+      rules:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+{{- end }}

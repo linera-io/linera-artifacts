@@ -1,0 +1,31 @@
+suite: servicemonitor
+templates:
+  - servicemonitor.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing by default (opt-in)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders ServiceMonitor when enabled
+    set:
+      serviceMonitor.enabled: true
+      serviceMonitor.interval: 15s
+      serviceMonitor.labels:
+        release: prometheus
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ServiceMonitor
+      - equal:
+          path: metadata.labels.release
+          value: prometheus
+      - equal:
+          path: spec.endpoints[0].interval
+          value: 15s
+      - equal:
+          path: spec.endpoints[0].port
+          value: metrics

@@ -1,0 +1,130 @@
+{{/*
+NetworkPolicies for the validator. Only emitted when the cluster runs
+a NetworkPolicy enforcer (Calico, Cilium, kube-router, …). Most
+managed clusters ship one by default; if yours doesn't, these
+resources exist harmlessly but enforce nothing.
+
+Three policies:
+  - proxy: accepts client gRPC from anywhere on the proxy port and
+    inter-proxy traffic on the internal port; egress to shards, the
+    storage backend, DNS, and anywhere else the chart needs.
+  - shards: accepts ingress ONLY from proxy pods (gRPC to shards)
+    plus scraping from the monitoring namespace; egress to the
+    storage backend and DNS.
+  - deny-all default: flips the namespace to deny-by-default so the
+    rules above become necessary. Opt-in separately to avoid
+    locking out sidecars operators already rely on.
+*/}}
+{{- if .Values.networkPolicy.enabled -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.ports.proxy }}
+      {{- with .Values.networkPolicy.proxyIngressFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    # Inter-proxy gRPC (always restricted to the proxy StatefulSet).
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.ports.proxyInternal }}
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 14 }}
+    # Metrics scrape.
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.ports.metrics }}
+      {{- with .Values.networkPolicy.metricsScrapeFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    # Talk to shards.
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "shards") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ports.shard }}
+    # DNS.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-shards
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "shards") | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # gRPC from proxies only.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ports.shard }}
+    # Metrics scrape.
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.ports.metrics }}
+      {{- with .Values.networkPolicy.metricsScrapeFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    # DNS.
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- if .Values.networkPolicy.defaultDeny }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-default-deny
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- end }}
+{{- end }}

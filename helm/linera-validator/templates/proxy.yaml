@@ -1,0 +1,204 @@
+# Headless service used for proxy <-> proxy gRPC communication.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy-internal
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+  ports:
+    - name: proxy-internal
+      port: {{ .Values.ports.proxyInternal }}
+      targetPort: proxy-internal
+---
+# External service exposing the proxy to clients.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+  {{- with .Values.proxies.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.proxies.service.type }}
+  {{- with .Values.proxies.service.loadBalancerIP }}
+  loadBalancerIP: {{ . | quote }}
+  {{- end }}
+  selector:
+    {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.ports.proxy }}
+      targetPort: grpc
+    - name: metrics
+      port: {{ .Values.ports.metrics }}
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
+spec:
+  serviceName: {{ include "linera-validator.fullname" . }}-proxy-internal
+  replicas: {{ .Values.proxies.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "proxy") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 8 }}
+        {{- with .Values.proxies.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.proxies.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "linera-validator.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.proxies.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxies.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.proxies.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxies.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxies.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxies.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxies.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: storage-wait
+          image: {{ include "linera-validator.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.proxies.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              while true; do
+                if /linera storage check-existence --storage {{ .Values.storage.uri | quote }}; then
+                  echo "Storage ready."
+                  exit 0
+                fi
+                echo "Storage not ready yet, retrying in 5s..."
+                sleep 5
+              done
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+      containers:
+        - name: linera-proxy
+          image: {{ include "linera-validator.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.proxies.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              ORDINAL="${HOSTNAME##*-}"
+              exec /linera-proxy \
+                --storage {{ .Values.storage.uri | quote }} \
+                --storage-replication-factor {{ .Values.storage.replicationFactor | quote }} \
+                {{- include "linera-validator.cliFlags" .Values.proxies.cli | nindent 16 }} \
+                --id "$ORDINAL" \
+                /config/server.json
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.ports.proxy }}
+              protocol: TCP
+            - name: proxy-internal
+              containerPort: {{ .Values.ports.proxyInternal }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint | quote }}
+            {{- with .Values.proxies.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.proxies.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- if .Values.proxies.livenessProbe }}
+            {{- toYaml .Values.proxies.livenessProbe | nindent 12 }}
+            {{- else }}
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            {{- end }}
+          {{- with .Values.proxies.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.proxies.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- with .Values.proxies.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "linera-validator.configSecretName" . }}
+            items:
+              - key: serverConfig
+                path: server.json
+              - key: genesisConfig
+                path: genesis.json
+        {{- with .Values.proxies.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

@@ -1,0 +1,64 @@
+{{- if .Values.scylla.enabled -}}
+apiVersion: scylla.scylladb.com/v1
+kind: ScyllaCluster
+metadata:
+  name: {{ .Values.scylla.name | quote }}
+  namespace: {{ .Values.scylla.namespace | quote }}
+  labels:
+    {{- include "linera-validator-stack.labels" . | nindent 4 }}
+spec:
+  version: {{ .Values.scylla.scyllaVersion | quote }}
+  repository: {{ .Values.scylla.scyllaImage | quote }}
+  agentVersion: {{ .Values.scylla.agentVersion | quote }}
+  agentRepository: {{ .Values.scylla.agentImage | quote }}
+  {{- if .Values.scylla.developerMode }}
+  developerMode: true
+  {{- end }}
+  {{- with .Values.scylla.sysctls }}
+  sysctls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  datacenter:
+    name: {{ .Values.scylla.datacenter | quote }}
+    racks:
+      - name: {{ .Values.scylla.rack.name | quote }}
+        members: {{ .Values.scylla.rack.members }}
+        scyllaConfig: scylla-config
+        storage:
+          capacity: {{ .Values.scylla.rack.storage.capacity | quote }}
+          {{- with .Values.scylla.rack.storage.storageClassName }}
+          storageClassName: {{ . | quote }}
+          {{- end }}
+        {{- with .Values.scylla.rack.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- if or .Values.scylla.rack.placement.nodeAffinity .Values.scylla.rack.placement.tolerations }}
+        placement:
+          {{- with .Values.scylla.rack.placement.nodeAffinity }}
+          nodeAffinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.scylla.rack.placement.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+  {{- if .Values.scylla.backups.enabled }}
+  backups:
+    - name: {{ .Values.scylla.backups.name | quote }}
+      cron: {{ .Values.scylla.backups.cron | quote }}
+      keyspace:
+        {{- range .Values.scylla.backups.keyspaces }}
+        - {{ . | quote }}
+        {{- end }}
+      location:
+        - {{ required ".Values.scylla.backups.location is required when backups.enabled is true" .Values.scylla.backups.location | quote }}
+      rateLimit:
+        {{- range .Values.scylla.backups.rateLimit }}
+        - {{ . | quote }}
+        {{- end }}
+      retention: {{ .Values.scylla.backups.retentionDays }}
+      numRetries: {{ .Values.scylla.backups.numRetries }}
+  {{- end }}
+{{- end -}}

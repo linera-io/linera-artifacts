@@ -1,0 +1,38 @@
+# Smallest install on a single-node dev cluster (kind, minikube, k3d).
+# Pairs with the docker-compose stack in spirit: 1 shard, 1 proxy, no
+# resource requests, in-memory storage.
+
+image:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  tag: testnet_conway_release
+
+# Use dual storage so you don't need a real ScyllaDB to start. The
+# RocksDB PVC is created per shard; ScyllaDB is still required for the
+# replicated path but the shard will function for read-mostly testing.
+storage:
+  uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  dual: true
+  rocksdbSize: 1Gi
+
+shards:
+  replicas: 1
+  resources: {}   # no requests/limits — let the kind node assign
+
+proxies:
+  replicas: 1
+  resources: {}
+  service:
+    type: NodePort   # easy to reach from the host
+
+# Skip the ServiceMonitor on dev clusters that don't run a Prometheus
+# Operator.
+serviceMonitor:
+  enabled: false
+
+validator:
+  # Replace with the name of the Secret you created from
+  # genesis.json + server_1.json.
+  existingSecret: validator-config
+
+networkName: dev
+validatorLabel: dev-1

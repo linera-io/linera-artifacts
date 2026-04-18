@@ -1,0 +1,65 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.deprecationWarning" . }}
+
+{{ template "chart.badgesSection" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.homepageLine" . }}
+
+Use this chart for the simplest possible single-namespace setup. For
+production-grade installs that want components in separate releases /
+namespaces, install the sub-charts individually.
+
+## Sub-charts
+
+| Sub-chart | Default | Description |
+|-----------|---------|-------------|
+| [`linera-validator`](../linera-validator/) | enabled | Validator core (shards + proxies). |
+| [`linera-block-exporter`](../linera-block-exporter/) | disabled | Side-car that pushes blocks to indexers. |
+
+## Bundled resources
+
+The umbrella also emits:
+
+- A `ScyllaCluster` CR (requires
+  [scylla-operator](https://github.com/scylladb/scylla-operator) to be
+  pre-installed).
+- The `scylla-config` ConfigMap consumed by the ScyllaCluster as its
+  `scylla.yaml`.
+
+## Prerequisites
+
+The umbrella **does not install operators**. The following must
+already exist in the cluster:
+
+- [scylla-operator](https://github.com/scylladb/scylla-operator)
+  (always required when `scylla.enabled=true`)
+- cert-manager and external-dns are recommended for production but
+  optional.
+
+## TL;DR
+
+```bash
+helm install validator-1 \
+  oci://ghcr.io/linera-io/charts/linera-validator-stack \
+  --namespace linera --create-namespace \
+  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set linera-validator.image.tag=testnet_conway_release \
+  --set linera-validator.validator.existingSecret=validator-config
+```
+
+{{ template "chart.maintainersSection" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+## License
+
+Apache 2.0.
+
+{{ template "helm-docs.versionFooter" . }}

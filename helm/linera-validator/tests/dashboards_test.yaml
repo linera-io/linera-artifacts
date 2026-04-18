@@ -1,0 +1,40 @@
+suite: dashboards
+templates:
+  - grafana-dashboards.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing by default (opt-in)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: emits one ConfigMap per JSON file in dashboards/ when enabled
+    set:
+      dashboards.enabled: true
+    asserts:
+      # Matches the number of *.json files under helm/linera-validator/dashboards/
+      # (recursive, including linera/*, profiling/*, scylla/*, scylla-manager/*).
+      # Update this count if you add or remove dashboards.
+      - hasDocuments:
+          count: 17
+      - isKind:
+          of: ConfigMap
+
+  - it: labels ConfigMaps for the Grafana sidecar
+    set:
+      dashboards.enabled: true
+    asserts:
+      - equal:
+          path: metadata.labels.grafana_dashboard
+          value: "1"
+
+  - it: respects a custom sidecar label
+    set:
+      dashboards.enabled: true
+      dashboards.label: my_dashboard_label
+      dashboards.labelValue: "7"
+    asserts:
+      - equal:
+          path: metadata.labels.my_dashboard_label
+          value: "7"

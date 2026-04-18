@@ -1,0 +1,40 @@
+suite: ingress
+templates:
+  - ingress.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing when ingress is disabled (default)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders Ingress when enabled with hosts
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+      ingress.hosts:
+        - host: validator.example.com
+          paths:
+            - path: /
+              pathType: Prefix
+      ingress.tls:
+        - secretName: validator-tls
+          hosts: [validator.example.com]
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - equal:
+          path: spec.rules[0].host
+          value: validator.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: rel-linera-validator-proxy
+      - equal:
+          path: spec.tls[0].secretName
+          value: validator-tls

@@ -1,0 +1,84 @@
+# Pin Scylla (and optionally shard RocksDB cache) to dedicated nodes.
+#
+# This is the "storage covered by node selection" pattern: the chart
+# itself stays provider-agnostic, but the operator picks which nodes
+# are allowed to run the data plane. Useful when the cluster has a
+# mix of hardware — e.g. general-purpose nodes for everything, plus a
+# smaller pool of NVMe/local-SSD nodes reserved for databases.
+#
+# Assumptions about the cluster:
+#   - A nodepool exists whose nodes carry the label
+#       workload=storage
+#     and the taint
+#       workload=storage:NoSchedule
+#   - A StorageClass backed by the local SSDs of that nodepool is
+#     available (examples: `local-ssd-resource-adapter` on GKE, `gp3`
+#     on EKS, `local-path` on Rancher/bare-metal). Replace
+#     `storageClassName` below with yours.
+#   - scylla-operator is installed (either via
+#     `scripts/install-prereqs.sh` or an external add-on).
+#
+# This file is consumed by the `linera-validator-stack` umbrella:
+#   helm install validator oci://ghcr.io/linera-io/charts/linera-validator-stack \
+#     -f dedicated-storage-nodes.yaml -f my-identity.yaml
+
+linera-validator:
+  # Validator pods DO NOT need to be on the storage nodepool. Keep
+  # them free to schedule wherever there's CPU + memory.
+  # If you DO want the shard RocksDB cache on the same local SSDs
+  # as Scylla, uncomment the nodeSelector + tolerations below AND
+  # set `storage.rocksdbStorageClass` to the fast class. Not
+  # strictly necessary — RocksDB is a read cache, latency matters
+  # less than Scylla's primary write path.
+  shards: {}
+  # shards:
+  #   nodeSelector:
+  #     workload: storage
+  #   tolerations:
+  #     - key: workload
+  #       operator: Equal
+  #       value: storage
+  #       effect: NoSchedule
+
+  storage:
+    uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+    # rocksdbStorageClass: "your-fast-ssd-storageclass"
+    # rocksdbSize: 100Gi
+
+scylla:
+  enabled: true
+  datacenter: validator
+
+  rack:
+    name: rack
+    members: 3
+    storage:
+      capacity: 500Gi
+      # Fast local SSD StorageClass for ScyllaDB's primary data path.
+      # See `helm show values oci://ghcr.io/linera-io/charts/linera-validator-stack`
+      # for a full list of provider suggestions. Replace below with
+      # the one your cluster exposes.
+      storageClassName: "local-ssd-resource-adapter"
+    resources:
+      requests:
+        cpu: "7"
+        memory: 51Gi
+      limits:
+        cpu: "7"
+        memory: 51Gi
+    placement:
+      # Required: only schedule on the storage nodepool.
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: workload
+                  operator: In
+                  values:
+                    - storage
+      # Required: tolerate the NoSchedule taint.
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: storage
+          effect: NoSchedule

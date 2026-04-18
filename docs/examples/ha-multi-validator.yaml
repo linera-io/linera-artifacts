@@ -1,0 +1,122 @@
+# Production HA: 3 proxies with anti-affinity, shards spread across
+# 3 zones, dedicated node pool, prometheus + tracing wired up.
+#
+# Use this as a starting point for any production validator install,
+# regardless of cloud provider.
+
+image:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  tag: testnet_conway_release
+  pullPolicy: IfNotPresent
+
+log:
+  level: info
+  backtrace: "1"
+
+# OpenTelemetry collector — every container exports traces.
+otlpExporterEndpoint: "http://otel-collector.observability.svc:4317"
+
+storage:
+  uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  replicationFactor: 3
+
+shards:
+  replicas: 12
+  resources:
+    requests:
+      cpu: "7"
+      memory: 55Gi
+    limits:
+      cpu: "8"
+      memory: 60Gi
+  nodeSelector:
+    workload: linera-shards
+  tolerations:
+    - key: linera.io/dedicated
+      value: shards
+      effect: NoSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: shards
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: shards
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: shards
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    readOnlyRootFilesystem: false   # linera writes to /tmp
+  livenessProbe:
+    tcpSocket:
+      port: grpc
+    initialDelaySeconds: 120
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+proxies:
+  replicas: 3
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      cpu: "4"
+      memory: 12Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: proxy
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: proxy
+
+# Gateway API + cert-manager + external-dns.
+gateway:
+  enabled: true
+  className: envoy
+  hostname: validator.example.com
+  tlsSecretName: validator-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: validator.example.com
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+  interval: 15s
+  scrapeTimeout: 10s
+
+validator:
+  existingSecret: validator-config
+
+networkName: mainnet
+validatorLabel: validator-1
