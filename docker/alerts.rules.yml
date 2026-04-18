@@ -1,0 +1,100 @@
+# Minimal alert rule set for a single Linera validator.
+#
+# These are deliberately conservative and intended as a starting
+# point — tune thresholds to match the SLOs you've agreed with the
+# Linera network operators.
+
+groups:
+  - name: linera-validator
+    interval: 30s
+    rules:
+
+      - alert: LineraValidatorDown
+        expr: up{job=~"proxy|shards"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: "{{ $labels.job }}"
+        annotations:
+          summary: "Linera {{ $labels.job }} is down on {{ $labels.instance }}"
+          description: |
+            Prometheus has been unable to scrape {{ $labels.instance }}
+            for more than 2 minutes. Either the process crashed or the
+            host network is broken.
+
+      - alert: LineraShardRestarting
+        expr: increase(process_start_time_seconds{job="shards"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: shard
+        annotations:
+          summary: "Shard {{ $labels.instance }} restarted"
+          description: |
+            A shard process restarted in the last 10 minutes. A single
+            restart is usually harmless (image update, OOM kill) but
+            repeated restarts indicate a deeper problem.
+
+      - alert: LineraProxyHighLatency
+        expr: histogram_quantile(0.99, rate(linera_proxy_grpc_duration_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: proxy
+        annotations:
+          summary: "Proxy p99 gRPC latency > 2s"
+          description: |
+            The proxy's p99 gRPC latency has exceeded 2 seconds for
+            10 minutes. Clients are likely seeing degraded response
+            times.
+
+  - name: scylla
+    interval: 30s
+    rules:
+
+      - alert: ScyllaDown
+        expr: up{job="scylla"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: scylla
+        annotations:
+          summary: "ScyllaDB is down"
+          description: |
+            Prometheus cannot scrape ScyllaDB. The validator shards
+            will stop committing blocks until storage is restored.
+
+      - alert: ScyllaDiskFillingFast
+        expr: |
+          predict_linear(
+            node_filesystem_avail_bytes{mountpoint="/var/lib/scylla"}[1h],
+            7*24*3600
+          ) < 0
+        for: 30m
+        labels:
+          severity: warning
+          component: scylla
+        annotations:
+          summary: "ScyllaDB disk will fill within 7 days"
+          description: |
+            At the current growth rate the ScyllaDB data disk
+            ({{ $labels.mountpoint }} on {{ $labels.instance }}) will
+            fill within 7 days. Plan an expansion or a retention cut.
+
+  - name: host
+    interval: 30s
+    rules:
+
+      - alert: HostHighMemoryPressure
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 15m
+        labels:
+          severity: warning
+          component: host
+        annotations:
+          summary: "Host memory available < 10%"
+          description: |
+            Available memory has been below 10% for 15 minutes on
+            {{ $labels.instance }}. Validator shards may start
+            OOM-killing.

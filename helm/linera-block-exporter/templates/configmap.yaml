@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "linera-block-exporter.configMapName" . }}
+  labels:
+    {{- include "linera-block-exporter.labels" . | nindent 4 }}
+data:
+  {{- range $i := until (int .Values.exporter.replicas) }}
+  exporter-config-{{ $i }}.toml: |
+    id = {{ $i }}
+    metrics_port = {{ $.Values.ports.metrics }}
+
+    [service_config]
+    host = "0.0.0.0"
+    port = {{ $.Values.ports.grpc }}
+
+    [destination_config]
+    committee_destination = {{ $.Values.committeeDestination }}
+
+    {{- range $.Values.destinations }}
+
+    [[destination_config.destinations]]
+    kind = {{ .kind | quote }}
+    tls = {{ .tls | quote }}
+    port = {{ .port }}
+    endpoint = {{ required "destinations[].endpoint is required" .endpoint | quote }}
+    {{- end }}
+
+    [limits]
+    persistence_period_ms = {{ $.Values.limits.persistencePeriodMs }}
+    work_queue_size = {{ $.Values.limits.workQueueSize }}
+    blob_cache_weight_mb = {{ $.Values.limits.blobCacheWeightMb }}
+    blob_cache_items_capacity = {{ $.Values.limits.blobCacheItemsCapacity }}
+    block_cache_weight_mb = {{ $.Values.limits.blockCacheWeightMb }}
+    block_cache_items_capacity = {{ $.Values.limits.blockCacheItemsCapacity }}
+    auxiliary_cache_size_mb = {{ $.Values.limits.auxiliaryCacheSizeMb }}
+  {{- end }}

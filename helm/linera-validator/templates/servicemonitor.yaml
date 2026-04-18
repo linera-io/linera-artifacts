@@ -1,0 +1,40 @@
+{{- if .Values.serviceMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "linera-validator.fullname" . }}
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - {{ include "linera-validator.name" . }}
+      - key: app.kubernetes.io/instance
+        operator: In
+        values:
+          - {{ .Release.Name }}
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - shards
+          - proxy
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: http
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+          targetLabel: job
+          replacement: linera-${1}
+{{- end }}

@@ -1,0 +1,174 @@
+# =============================================================================
+# linera-block-exporter
+# =============================================================================
+#
+# Required before installing:
+#   1. image.repository — image with the linera + linera-exporter binaries
+#   2. storage.uri — ScyllaDB connection string of the validator this
+#      exporter follows (typically the same value used by linera-validator)
+#   3. destinations[].endpoint — at least one indexer to push blocks to
+# =============================================================================
+
+fullnameOverride: ""
+nameOverride: ""
+commonLabels: {}
+
+image:
+  # -- Image with the linera + linera-exporter binaries (REQUIRED).
+  # The same image used by linera-validator works.
+  repository: ""
+  # -- Image tag. Defaults to .Chart.appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# =============================================================================
+# Validator storage backend (REQUIRED — must match the validator)
+# =============================================================================
+
+storage:
+  # -- Connection string for the validator's storage backend. Same value
+  # passed to linera-validator (typically "scylladb:tcp:scylla-client.scylla
+  # .svc.cluster.local:9042"). The exporter reads blocks from this database.
+  uri: ""
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+log:
+  level: info
+  backtrace: "1"
+
+# =============================================================================
+# Networking
+# =============================================================================
+
+ports:
+  # -- gRPC port the exporter exposes for service-config peers.
+  grpc: 8882
+  # -- Prometheus metrics port.
+  metrics: 9091
+
+# =============================================================================
+# Indexer destinations
+# =============================================================================
+# Where the exporter pushes blocks. Each destination becomes a
+# [[destination_config.destinations]] entry in the TOML config.
+# Today only the "Indexer" kind is supported by linera-exporter.
+
+destinations:
+  # -- One or more indexer endpoints to push blocks to.
+  - kind: Indexer
+    # -- DNS name or IP of the indexer.
+    endpoint: ""
+    # -- gRPC port of the indexer.
+    port: 8081
+    # -- TLS mode: "ClearText" (in-cluster) or "Tls" (e.g. external indexer
+    # behind a Gateway with cert-manager TLS).
+    tls: ClearText
+
+# Whether to register the exporter with the validator's committee. Almost
+# always true.
+committeeDestination: true
+
+# =============================================================================
+# Exporter limits / cache settings (TOML [limits] section)
+# =============================================================================
+# Defaults match the values currently used in the linera-protocol
+# kubernetes chart. Adjust to fit your hardware.
+
+limits:
+  persistencePeriodMs: 5000
+  workQueueSize: 256
+  blobCacheWeightMb: 1024
+  blobCacheItemsCapacity: 8192
+  blockCacheWeightMb: 1024
+  blockCacheItemsCapacity: 8192
+  auxiliaryCacheSizeMb: 1024
+
+# =============================================================================
+# Exporter workload (StatefulSet)
+# =============================================================================
+
+exporter:
+  # -- Number of exporter replicas. Each replica gets its own TOML config
+  # (id = pod ordinal) so they can shard the work.
+  replicas: 1
+
+  # -- Resource requests and limits.
+  resources: {}
+
+  # -- Pod scheduling.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+  priorityClassName: ""
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
+
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  podAnnotations: {}
+  podLabels: {}
+  terminationGracePeriodSeconds: 30
+
+  # -- Persistent volume claim template for exporter state. Disable for
+  # ephemeral storage (data lost on pod restart).
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 1Gi
+    accessMode: ReadWriteOnce
+
+  # -- Wait for the validator's database to exist before starting.
+  storageInitCheck:
+    enabled: true
+    retryIntervalSeconds: 5
+
+  # -- Wait for each indexer destination to respond before starting.
+  indexerReadinessCheck:
+    enabled: true
+    retryIntervalSeconds: 5
+    # -- Image used for the curl probe. Defaults to upstream curlimages/curl.
+    image: curlimages/curl:8.10.1
+
+# =============================================================================
+# Service & ServiceMonitor
+# =============================================================================
+
+service:
+  type: ClusterIP
+  annotations: {}
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+
+# =============================================================================
+# RBAC and ServiceAccount
+# =============================================================================
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}

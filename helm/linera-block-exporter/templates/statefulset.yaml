@@ -1,0 +1,252 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "linera-block-exporter.fullname" . }}
+  labels:
+    {{- include "linera-block-exporter.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  clusterIP: None
+  selector:
+    {{- include "linera-block-exporter.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.ports.grpc }}
+      targetPort: grpc
+    - name: metrics
+      port: {{ .Values.ports.metrics }}
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "linera-block-exporter.fullname" . }}
+  labels:
+    {{- include "linera-block-exporter.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "linera-block-exporter.fullname" . }}
+  replicas: {{ .Values.exporter.replicas }}
+  selector:
+    matchLabels:
+      {{- include "linera-block-exporter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "linera-block-exporter.labels" . | nindent 8 }}
+        {{- with .Values.exporter.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        # Roll the StatefulSet when the TOML config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.exporter.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "linera-block-exporter.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.exporter.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.exporter.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.exporter.storageInitCheck.enabled }}
+        - name: storage-check
+          image: {{ include "linera-block-exporter.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.exporter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              while true; do
+                if /linera storage check-existence \
+                     --storage {{ required "storage.uri is required" .Values.storage.uri | quote }}; then
+                  echo "Validator database ready."
+                  exit 0
+                fi
+                echo "Validator database not ready yet, retrying in {{ .Values.exporter.storageInitCheck.retryIntervalSeconds }}s..."
+                sleep {{ .Values.exporter.storageInitCheck.retryIntervalSeconds }}
+              done
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+        {{- end }}
+        - name: config-selector
+          image: {{ .Values.exporter.indexerReadinessCheck.image | quote }}
+          {{- with .Values.exporter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              ORDINAL="${HOSTNAME##*-}"
+              cp "/configmap/exporter-config-${ORDINAL}.toml" /config/exporter-config.toml
+              echo "Selected config for ordinal ${ORDINAL}"
+          volumeMounts:
+            - name: configmap
+              mountPath: /configmap
+              readOnly: true
+            - name: config
+              mountPath: /config
+        {{- if .Values.exporter.indexerReadinessCheck.enabled }}
+        {{- range $i, $dest := .Values.destinations }}
+        - name: indexer-ready-{{ $i }}
+          image: {{ $.Values.exporter.indexerReadinessCheck.image | quote }}
+          {{- with $.Values.exporter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              {{- if eq $dest.tls "Tls" }}
+              URL="https://{{ $dest.endpoint }}:{{ $dest.port }}"
+              INSECURE="--insecure"
+              {{- else }}
+              URL="http://{{ $dest.endpoint }}:{{ $dest.port }}"
+              INSECURE=""
+              {{- end }}
+              echo "Waiting for indexer at ${URL}..."
+              while true; do
+                if curl --max-time 5 --connect-timeout 5 --silent --fail $INSECURE "${URL}" > /dev/null 2>&1 \
+                   || curl --max-time 5 --connect-timeout 5 --silent --head $INSECURE "${URL}" > /dev/null 2>&1; then
+                  echo "Indexer reachable."
+                  exit 0
+                fi
+                echo "Not ready, retrying in {{ $.Values.exporter.indexerReadinessCheck.retryIntervalSeconds }}s..."
+                sleep {{ $.Values.exporter.indexerReadinessCheck.retryIntervalSeconds }}
+              done
+        {{- end }}
+        {{- end }}
+      containers:
+        - name: linera-exporter
+          image: {{ include "linera-block-exporter.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.exporter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - /linera-exporter
+            - run
+            - --storage
+            - {{ .Values.storage.uri | quote }}
+            - --config-path
+            - /config/exporter-config.toml
+            - --metrics-port
+            - {{ .Values.ports.metrics | quote }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.ports.grpc }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+            {{- with .Values.exporter.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.exporter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- if .Values.exporter.livenessProbe }}
+            {{- toYaml .Values.exporter.livenessProbe | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            {{- end }}
+          readinessProbe:
+            {{- if .Values.exporter.readinessProbe }}
+            {{- toYaml .Values.exporter.readinessProbe | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            {{- end }}
+          {{- with .Values.exporter.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- if .Values.exporter.persistence.enabled }}
+            - name: data
+              mountPath: /data
+            {{- end }}
+            {{- with .Values.exporter.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: configmap
+          configMap:
+            name: {{ include "linera-block-exporter.configMapName" . }}
+        - name: config
+          emptyDir: {}
+        {{- with .Values.exporter.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.exporter.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [{{ .Values.exporter.persistence.accessMode }}]
+        {{- with .Values.exporter.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.exporter.persistence.size }}
+  {{- end }}

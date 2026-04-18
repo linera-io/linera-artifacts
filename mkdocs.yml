@@ -1,0 +1,84 @@
+site_name: Linera Validator Artifacts
+site_description: Public deployment artifacts for Linera validators — Helm charts, docker compose, operator guides.
+site_url: https://docs.infra.linera.net/
+repo_url: https://github.com/linera-io/linera-artifacts
+repo_name: linera-io/linera-artifacts
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      accent: red
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Quickstart: QUICKSTART.md
+  - Guides:
+      - Architecture: ARCHITECTURE.md
+      - Helm: HELM.md
+      - Docker Compose: DOCKER-COMPOSE.md
+      - Observability: OBSERVABILITY.md
+      - Dev loop: DEV-LOOP.md
+      - Migrate from protocol repo: MIGRATION-FROM-TESTNET-CONWAY-DOCKER.md
+  - Examples: examples/README.md
+  - Chart READMEs:
+      - linera-validator: https://github.com/linera-io/linera-artifacts/tree/main/helm/linera-validator
+      - linera-block-exporter: https://github.com/linera-io/linera-artifacts/tree/main/helm/linera-block-exporter
+      - linera-validator-stack: https://github.com/linera-io/linera-artifacts/tree/main/helm/linera-validator-stack
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/linera-io
+    - icon: fontawesome/brands/twitter
+      link: https://x.com/linera_io
+    - icon: fontawesome/brands/discord
+      link: https://discord.com/invite/linera

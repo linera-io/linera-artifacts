@@ -1,0 +1,73 @@
+suite: gateway
+templates:
+  - gateway.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing when gateway is disabled (default)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders Gateway and GRPCRoute when enabled
+    set:
+      gateway.enabled: true
+      gateway.className: envoy
+      gateway.hostname: validator.example.com
+      gateway.tlsSecretName: validator-tls
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        isKind:
+          of: Gateway
+      - documentIndex: 0
+        equal:
+          path: spec.gatewayClassName
+          value: envoy
+      - documentIndex: 0
+        equal:
+          path: spec.listeners[0].hostname
+          value: validator.example.com
+      - documentIndex: 0
+        equal:
+          path: spec.listeners[0].tls.certificateRefs[0].name
+          value: validator-tls
+      - documentIndex: 1
+        isKind:
+          of: GRPCRoute
+      - documentIndex: 1
+        equal:
+          path: spec.hostnames[0]
+          value: validator.example.com
+      - documentIndex: 1
+        equal:
+          path: spec.rules[0].backendRefs[0].name
+          value: rel-linera-validator-proxy
+
+  - it: fails when gateway.enabled is true but className is missing
+    set:
+      gateway.enabled: true
+      gateway.hostname: validator.example.com
+      gateway.tlsSecretName: validator-tls
+    asserts:
+      - failedTemplate:
+          errorMessage: ".Values.gateway.className is required when gateway.enabled is true"
+
+  - it: fails when gateway.enabled is true but hostname is missing
+    set:
+      gateway.enabled: true
+      gateway.className: envoy
+      gateway.tlsSecretName: validator-tls
+    asserts:
+      - failedTemplate:
+          errorMessage: ".Values.gateway.hostname is required when gateway.enabled is true"
+
+  - it: fails when gateway.enabled is true but tlsSecretName is missing
+    set:
+      gateway.enabled: true
+      gateway.className: envoy
+      gateway.hostname: validator.example.com
+    asserts:
+      - failedTemplate:
+          errorMessage: ".Values.gateway.tlsSecretName is required when gateway.enabled is true"

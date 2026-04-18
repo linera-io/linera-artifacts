@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.rules.yml
+
+scrape_configs:
+  # Alloy's own metrics (exposes a "targets" page at :12345).
+  - job_name: 'alloy'
+    static_configs:
+      - targets: ['alloy:12345']
+
+  # cAdvisor — per-container CPU/mem/io.
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Linera proxy.
+  - job_name: 'proxy'
+    static_configs:
+      - targets: ['proxy:21100']
+
+  # Linera shards.
+  - job_name: 'shards'
+    static_configs:
+      - targets:
+          - 'docker-shard-1:21100'
+          - 'docker-shard-2:21100'
+          - 'docker-shard-3:21100'
+          - 'docker-shard-4:21100'

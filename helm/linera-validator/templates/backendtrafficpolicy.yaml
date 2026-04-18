@@ -1,0 +1,44 @@
+{{- if and .Values.gateway.enabled .Values.gateway.envoyBackendTrafficPolicy.enabled -}}
+{{- $btp := .Values.gateway.envoyBackendTrafficPolicy -}}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: {{ include "linera-validator.fullname" . }}-proxy
+  {{- with $btp.circuitBreaker }}
+  circuitBreaker:
+    {{- with .maxConnections }}
+    maxConnections: {{ int . }}
+    {{- end }}
+    {{- with .maxPendingRequests }}
+    maxPendingRequests: {{ int . }}
+    {{- end }}
+    {{- with .maxParallelRequests }}
+    maxParallelRequests: {{ int . }}
+    {{- end }}
+    {{- with .maxParallelRetries }}
+    maxParallelRetries: {{ int . }}
+    {{- end }}
+    {{- if hasKey . "maxRequestsPerConnection" }}
+    maxRequestsPerConnection: {{ int .maxRequestsPerConnection }}
+    {{- end }}
+  {{- end }}
+  {{- with $btp.http2 }}
+  http2:
+    {{- with .maxConcurrentStreams }}
+    maxConcurrentStreams: {{ int . }}
+    {{- end }}
+    {{- with .initialStreamWindowSize }}
+    initialStreamWindowSize: {{ int . }}
+    {{- end }}
+    {{- with .initialConnectionWindowSize }}
+    initialConnectionWindowSize: {{ int . }}
+    {{- end }}
+  {{- end }}
+{{- end }}

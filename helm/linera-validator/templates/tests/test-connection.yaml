@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-test-connection
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tcp-probe
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          set -eu
+          host="{{ include "linera-validator.fullname" . }}-proxy"
+          port="{{ .Values.ports.proxy }}"
+          attempts=30
+          while [ "$attempts" -gt 0 ]; do
+            if nc -z -w 2 "$host" "$port"; then
+              echo "OK: ${host}:${port} accepted a TCP connection"
+              exit 0
+            fi
+            attempts=$((attempts - 1))
+            sleep 2
+          done
+          echo "FAIL: ${host}:${port} did not respond within timeout" >&2
+          exit 1

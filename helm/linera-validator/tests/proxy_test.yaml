@@ -1,0 +1,81 @@
+suite: proxy
+templates:
+  - proxy.yaml
+release:
+  name: rel
+set:
+  image.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  image.tag: testnet_conway_release
+tests:
+  - it: renders headless internal Service, external Service, StatefulSet
+    asserts:
+      - hasDocuments:
+          count: 3
+      - documentIndex: 0
+        isKind:
+          of: Service
+      - documentIndex: 0
+        equal:
+          path: metadata.name
+          value: rel-linera-validator-proxy-internal
+      - documentIndex: 0
+        equal:
+          path: spec.clusterIP
+          value: None
+      - documentIndex: 1
+        isKind:
+          of: Service
+      - documentIndex: 1
+        equal:
+          path: metadata.name
+          value: rel-linera-validator-proxy
+      - documentIndex: 1
+        equal:
+          path: spec.type
+          value: ClusterIP
+      - documentIndex: 2
+        isKind:
+          of: StatefulSet
+      - documentIndex: 2
+        equal:
+          path: spec.replicas
+          value: 2
+
+  - it: external Service honors LoadBalancer overrides
+    set:
+      proxies.service.type: LoadBalancer
+      proxies.service.loadBalancerIP: 1.2.3.4
+      proxies.service.annotations:
+        cloud.google.com/load-balancer-type: External
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.type
+          value: LoadBalancer
+      - documentIndex: 1
+        equal:
+          path: spec.loadBalancerIP
+          value: 1.2.3.4
+      - documentIndex: 1
+        equal:
+          path: metadata.annotations["cloud.google.com/load-balancer-type"]
+          value: External
+
+  - it: scales proxies via proxies.replicas
+    set:
+      proxies.replicas: 3
+    asserts:
+      - documentIndex: 2
+        equal:
+          path: spec.replicas
+          value: 3
+
+  - it: configures proxy CLI flags
+    set:
+      proxies.cli:
+        storageMaxCacheSize: 999
+    asserts:
+      - documentIndex: 2
+        matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "--storage-max-cache-size 999"

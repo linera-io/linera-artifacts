@@ -1,0 +1,98 @@
+# Optional Grafana Alloy overlay — push metrics/logs/traces to a
+# remote backend.
+#
+# Enable only if you have your own remote Prometheus / Loki / Tempo
+# to push to. Otherwise leave disabled — /metrics on :21100 is always
+# available for any external scraper.
+#
+# Adds Alloy + cAdvisor on top of the validator stack. No on-box
+# storage — purely a forwarder.
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.alloy.yml \
+#     up -d
+#
+# Required env in .env (no defaults — without a remote endpoint Alloy
+# silently drops the data):
+#   PROMETHEUS_OTLP_URL, PROMETHEUS_OTLP_USER, PROMETHEUS_OTLP_PASS
+#   LOKI_PUSH_URL,       LOKI_PUSH_USER,       LOKI_PUSH_PASS
+#   TEMPO_OTLP_URL,      TEMPO_OTLP_USER,      TEMPO_OTLP_PASS
+
+# YAML anchors are file-local — overlays must redeclare. See
+# docker-compose.yml header for context (logs caused 506 GB outage).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "100m"
+    max-file: "5"
+    compress: "true"
+
+services:
+  cadvisor:
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.51.0}
+    container_name: cadvisor
+    restart: unless-stopped
+    logging: *default-logging
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      - "--housekeeping_interval=15s"
+      - "--docker_only=true"
+      # disk + diskIO kept enabled — needed for container_fs_*
+      # (single-container disk hog detection, ref incident 2026-04-29).
+      - "--disable_metrics=percpu,sched,tcp,udp,hugetlb,referenced_memory,advtcp,process,resctrl"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_CADVISOR:-0.50}"
+          memory: ${LIMIT_MEM_CADVISOR:-256M}
+
+  alloy:
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.5.0}
+    container_name: alloy
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "12345:12345"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./alloy-config.river:/etc/alloy/config.river:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host paths for the built-in unix exporter (= node_exporter).
+      # Read-only; rslave keeps the bind in sync if the host mount
+      # tree changes (new disks, etc.).
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    pid: host
+    command:
+      - "run"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "/etc/alloy/config.river"
+    environment:
+      - HOSTNAME=${HOSTNAME:-validator}
+      - PROMETHEUS_OTLP_URL=${PROMETHEUS_OTLP_URL:-}
+      - PROMETHEUS_OTLP_USER=${PROMETHEUS_OTLP_USER:-}
+      - PROMETHEUS_OTLP_PASS=${PROMETHEUS_OTLP_PASS:-}
+      - LOKI_PUSH_URL=${LOKI_PUSH_URL:-}
+      - LOKI_PUSH_USER=${LOKI_PUSH_USER:-}
+      - LOKI_PUSH_PASS=${LOKI_PUSH_PASS:-}
+      - TEMPO_OTLP_URL=${TEMPO_OTLP_URL:-}
+      - TEMPO_OTLP_USER=${TEMPO_OTLP_USER:-}
+      - TEMPO_OTLP_PASS=${TEMPO_OTLP_PASS:-}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      - proxy
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_ALLOY:-0.50}"
+          memory: ${LIMIT_MEM_ALLOY:-1G}

@@ -1,0 +1,147 @@
+# =============================================================================
+# linera-validator-stack
+# =============================================================================
+#
+# Umbrella that installs:
+#   - linera-validator (always, opt-out only)
+#   - linera-block-exporter (opt-in, recommended for the network)
+#   - ScyllaCluster CR (opt-in but on by default — the validator needs it)
+#
+# Most operators only need to set the validator's image, identity and
+# scheduling. Sub-chart values are passed through verbatim under their
+# chart name (Helm convention).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# linera-validator (mandatory component)
+# -----------------------------------------------------------------------------
+
+linera-validator:
+  enabled: true
+  # All linera-validator values go here. See:
+  #   helm show values oci://ghcr.io/linera-io/charts/linera-validator
+  # Example:
+  # image:
+  #   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  #   tag: testnet_conway_release
+  # validator:
+  #   existingSecret: validator-config
+
+# -----------------------------------------------------------------------------
+# linera-block-exporter (optional, recommended)
+# -----------------------------------------------------------------------------
+
+linera-block-exporter:
+  enabled: false
+  # When enabled, point at the same ScyllaDB the validator uses.
+  # Defaults match the in-cluster ScyllaCluster created below.
+  storage:
+    uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+  destinations: []
+  # destinations:
+  #   - kind: Indexer
+  #     endpoint: indexer.example.com
+  #     port: 8081
+  #     tls: ClearText
+
+# -----------------------------------------------------------------------------
+# ScyllaCluster CR (rendered as a template by this umbrella)
+# -----------------------------------------------------------------------------
+# Requires scylla-operator to be installed in the cluster (CRDs).
+# Set scylla.enabled=false to bring your own storage backend.
+
+scylla:
+  enabled: true
+
+  # -- Enable ScyllaCluster developerMode. Skips strict cpuset/CPU
+  # pinning, fewer resource checks. NEVER set true in production —
+  # only useful for kind / minikube / single-node test clusters.
+  developerMode: false
+
+  # -- Namespace where the ScyllaCluster lives. The chart does NOT create
+  # this namespace — create it ahead of time or let scylla-operator do it.
+  namespace: scylla
+
+  # -- ScyllaCluster name. Used by the auto-generated client Service
+  # (scylla-client.<namespace>.svc.cluster.local).
+  name: scylla
+
+  # -- Datacenter name (informational, exposed as a Scylla DC label).
+  datacenter: validator
+
+  # -- Container image versions. Defaults match the testnet-conway production
+  # validators.
+  scyllaVersion: "6.2.3"
+  scyllaImage: scylladb/scylla
+  agentVersion: "3.4.0@sha256:441403aed8880cad1feef68aa7a8ee9ffd99a458dc1dcff3dc54ce5bf3cb07b7"
+  agentImage: scylladb/scylla-manager-agent
+
+  # -- One ScyllaCluster rack. Add more entries to spread across racks.
+  rack:
+    name: rack
+    members: 1
+    storage:
+      capacity: 1000Gi
+      # -- StorageClass for the Scylla PVCs. Empty = cluster default
+      # (rarely what you want for ScyllaDB).
+      #
+      # Recommended values by provider:
+      #   GKE, regional PD-SSD:                   "premium-rwo"
+      #   GKE, zonal local SSDs (NVMe, fastest): "local-ssd-resource-adapter"
+      #                                          (requires the Local SSD CSI
+      #                                          driver enabled on the cluster
+      #                                          and matching nodepool with
+      #                                          --local-ssd-count > 0)
+      #   EKS, gp3 SSD:                          "gp3"
+      #   AKS, Premium SSD v2:                   "managed-premium"
+      #   OVH, managed control plane SSD:        "csi-cinder-high-speed"
+      #   Bare metal, local NVMe:                "local-path" (Rancher) or
+      #                                          a custom provisioner
+      #
+      # If you only have HDD-backed storage you will not meet Scylla's
+      # I/O requirements — use scripts/deploy-validator.sh --xfs-path
+      # on a bare-metal host instead.
+      storageClassName: ""
+    resources:
+      requests:
+        cpu: "7"
+        memory: 51Gi
+      limits:
+        cpu: "7"
+        memory: 51Gi
+    placement:
+      nodeAffinity: {}
+      # requiredDuringSchedulingIgnoredDuringExecution:
+      #   nodeSelectorTerms:
+      #     - matchExpressions:
+      #         - key: workload
+      #           operator: In
+      #           values: [scylla]
+      tolerations: []
+      # - key: scylla-db
+      #   operator: Equal
+      #   value: "true"
+      #   effect: NoSchedule
+
+  # -- ConfigMap consumed by the ScyllaCluster as its scylla.yaml.
+  # Created in the same namespace as the cluster.
+  config:
+    create: true
+    data:
+      query_tombstone_page_limit: 200000
+      commitlog_segment_size_in_mb: 64
+
+  # -- Sysctls applied at the node level by the ScyllaCluster spec.
+  sysctls:
+    - fs.aio-max-nr=4082080
+
+  # -- Backup schedule (Scylla Manager). Set to {} to disable.
+  backups:
+    enabled: false
+    cron: "0 4 * * *"
+    keyspaces: [kv]
+    location: ""              # e.g. "gcs:my-bucket"
+    rateLimit: ["50"]
+    retentionDays: 90
+    numRetries: 3
+    name: daily-backup

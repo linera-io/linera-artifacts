@@ -1,0 +1,69 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.deprecationWarning" . }}
+
+{{ template "chart.badgesSection" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.homepageLine" . }}
+
+> Running a block exporter on your validator is **strongly
+> encouraged**: it makes chain history available to the rest of the
+> network without affecting the validator's hot path.
+
+## Hard requirements
+
+- Must be deployed in the **same Kubernetes cluster** as a Linera
+  validator (this chart's [linera-validator](../linera-validator/)).
+- Must connect to the **same ScyllaDB cluster** the validator uses.
+- A reachable indexer endpoint to push blocks to.
+
+If you don't already run a validator, install
+[`linera-validator`](../linera-validator/) first. You also need an
+indexer endpoint reachable from the cluster to receive the pushed
+blocks.
+
+## TL;DR
+
+```bash
+helm install validator-1-exporter \
+  oci://ghcr.io/linera-io/charts/linera-block-exporter \
+  --namespace linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.tag=testnet_conway_release \
+  --set storage.uri='scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042' \
+  --set destinations[0].kind=Indexer \
+  --set destinations[0].endpoint=indexer.example.com \
+  --set destinations[0].port=8081 \
+  --set destinations[0].tls=ClearText
+```
+
+## How it works
+
+The exporter is a StatefulSet. Each replica:
+
+1. Waits for the validator's ScyllaDB to be initialized
+   (`linera storage check-existence`).
+2. Loads its TOML config (one per replica, keyed by the pod ordinal —
+   see `templates/configmap.yaml`).
+3. Waits for every configured indexer endpoint to respond on TCP.
+4. Runs `linera-exporter run --storage <uri> --config-path <toml>
+   --metrics-port <port>`.
+
+Multiple replicas shard the work between them via the `id` field in
+each TOML.
+
+{{ template "chart.maintainersSection" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+## License
+
+Apache 2.0.
+
+{{ template "helm-docs.versionFooter" . }}

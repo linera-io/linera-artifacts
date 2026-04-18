@@ -1,0 +1,40 @@
+suite: poddisruptionbudget
+templates:
+  - poddisruptionbudget.yaml
+release:
+  name: rel
+tests:
+  - it: emits a PDB for proxy by default (HA baseline)
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PodDisruptionBudget
+      - equal:
+          path: metadata.name
+          value: rel-linera-validator-proxy
+      - equal:
+          path: spec.minAvailable
+          value: 1
+      - equal:
+          path: spec.selector.matchLabels["app.kubernetes.io/component"]
+          value: proxy
+
+  - it: renders nothing when explicitly disabled (single-node opt-out)
+    set:
+      proxies.podDisruptionBudget.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: uses maxUnavailable when set
+    set:
+      proxies.podDisruptionBudget.enabled: true
+      proxies.podDisruptionBudget.minAvailable: null
+      proxies.podDisruptionBudget.maxUnavailable: 1
+    asserts:
+      - equal:
+          path: spec.maxUnavailable
+          value: 1
+      - notExists:
+          path: spec.minAvailable

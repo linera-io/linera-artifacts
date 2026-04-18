@@ -1,0 +1,14 @@
+{{- if and .Values.scylla.enabled .Values.scylla.config.create -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scylla-config
+  namespace: {{ .Values.scylla.namespace | quote }}
+  labels:
+    {{- include "linera-validator-stack.labels" . | nindent 4 }}
+data:
+  scylla.yaml: |
+    {{- range $key, $value := .Values.scylla.config.data }}
+    {{ $key }}: {{ $value }}
+    {{- end }}
+{{- end -}}

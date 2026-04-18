@@ -1,0 +1,32 @@
+{{ .Release.Name }} (linera-validator-stack) installed.
+
+Components:
+{{- if index .Values "linera-validator" "enabled" }}
+  ✓ linera-validator
+{{- else }}
+  ✗ linera-validator (disabled)
+{{- end }}
+{{- if index .Values "linera-block-exporter" "enabled" }}
+  ✓ linera-block-exporter
+{{- else }}
+  ✗ linera-block-exporter (disabled)
+{{- end }}
+{{- if .Values.scylla.enabled }}
+  ✓ ScyllaCluster ({{ .Values.scylla.namespace }}/{{ .Values.scylla.name }})
+{{- else }}
+  ✗ ScyllaCluster (disabled — bring your own storage)
+{{- end }}
+
+{{- if .Values.scylla.enabled }}
+
+NOTE: this chart only emits the ScyllaCluster CR. The scylla-operator
+must already be installed in the cluster for the CR to take effect:
+  helm install scylla-operator scylla/scylla-operator \
+    --namespace scylla-operator --create-namespace
+{{- end }}
+
+Check status:
+  kubectl --namespace {{ .Release.Namespace }} get pods
+{{- if .Values.scylla.enabled }}
+  kubectl --namespace {{ .Values.scylla.namespace }} get scyllaclusters
+{{- end }}

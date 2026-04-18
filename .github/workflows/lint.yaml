@@ -1,0 +1,211 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: yamllint
+        run: |
+          pip install yamllint==1.35.1
+          yamllint --strict .
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: shellcheck
+        run: |
+          if compgen -G "docker/*/entrypoint.sh" > /dev/null; then
+            sudo apt-get update && sudo apt-get install -y shellcheck
+            shellcheck docker/*/entrypoint.sh
+          fi
+
+  helm-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: helm-docs (regenerate and diff)
+        env:
+          HELM_DOCS_VERSION: v1.14.2
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work \
+            "jnorwood/helm-docs:${HELM_DOCS_VERSION}" \
+            --chart-search-root=helm
+          if ! git diff --exit-code -- helm/*/README.md; then
+            echo "::error::Chart README is out of date with values.yaml."
+            echo "::error::Run 'helm-docs' locally and commit the result."
+            exit 1
+          fi
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+      - name: helm lint (every chart)
+        run: |
+          set -euo pipefail
+          for chart in helm/*/; do
+            [ -f "$chart/Chart.yaml" ] || continue
+            echo "::group::helm lint $chart"
+            if [ -d "$chart/charts" ] || grep -q '^dependencies:' "$chart/Chart.yaml"; then
+              helm dependency build "$chart"
+            fi
+            helm lint "$chart"
+            echo "::endgroup::"
+          done
+
+  chart-testing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # ct compares against the target branch — fetch its history.
+          fetch-depth: 0
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+      - name: install Python (chart-testing dependency)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          check-latest: true
+      - name: install chart-testing
+        uses: helm/chart-testing-action@v2.6.1
+        with:
+          version: v3.11.0
+      - name: ct list-changed
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --config ct.yaml || true)
+          if [ -n "$changed" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: ct lint
+        # lint every chart on push to main, only changed charts on PRs
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ct lint --config ct.yaml
+          else
+            ct lint --config ct.yaml --all
+          fi
+
+  helm-unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+      - name: install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.1
+      - name: helm unittest (every chart with tests/)
+        run: |
+          set -euo pipefail
+          for chart in helm/*/; do
+            [ -d "$chart/tests" ] || continue
+            echo "::group::helm unittest $chart"
+            if [ -d "$chart/charts" ] || grep -q '^dependencies:' "$chart/Chart.yaml"; then
+              helm dependency build "$chart"
+            fi
+            helm unittest "$chart"
+            echo "::endgroup::"
+          done
+
+  kubeconform:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Validate against the oldest and newest kubernetes versions we
+        # claim to support. Bump these together with the chart README.
+        kubernetes-version: ["1.28.0", "1.30.0"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+      - name: install kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.6.7
+        run: |
+          base="https://github.com/yannh/kubeconform/releases/download"
+          url="${base}/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          curl -sSLo /tmp/kc.tgz "$url"
+          tar -xzf /tmp/kc.tgz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/
+          kubeconform -v
+      - name: helm template + kubeconform
+        env:
+          K8S_VERSION: ${{ matrix.kubernetes-version }}
+        run: |
+          set -euo pipefail
+          # Schema sources: built-in K8s schemas + the datreeio CRD catalog
+          # for ServiceMonitor, Gateway, GRPCRoute, ScyllaCluster, etc.
+          CRD_REPO="https://raw.githubusercontent.com/datreeio/CRDs-catalog/main"
+          SCHEMA_FLAGS=(
+            -strict
+            -summary
+            -kubernetes-version "$K8S_VERSION"
+            -schema-location default
+            -schema-location "$CRD_REPO/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+          )
+
+          render_and_validate() {
+            local chart="$1"; shift
+            echo "::group::kubeconform $chart"
+            if [ -d "$chart/charts" ] || grep -q '^dependencies:' "$chart/Chart.yaml"; then
+              helm dependency build "$chart"
+            fi
+            helm template release-name "$chart" "$@" | kubeconform "${SCHEMA_FLAGS[@]}"
+            echo "::endgroup::"
+          }
+
+          # linera-validator: render with both ingress and gateway enabled
+          # and serviceMonitor on, so every optional resource is exercised.
+          render_and_validate helm/linera-validator \
+            --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set validator.serverConfigData=stub \
+            --set validator.genesisConfigData=stub \
+            --set serviceMonitor.enabled=true \
+            --set ingress.enabled=true \
+            --set 'ingress.hosts[0].host=v.example.com' \
+            --set 'ingress.hosts[0].paths[0].path=/' \
+            --set 'ingress.hosts[0].paths[0].pathType=Prefix' \
+            --set gateway.enabled=true \
+            --set gateway.className=envoy \
+            --set gateway.hostname=v.example.com \
+            --set gateway.tlsSecretName=tls
+
+          # linera-block-exporter
+          render_and_validate helm/linera-block-exporter \
+            --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set storage.uri=scylladb:tcp:scylla:9042 \
+            --set 'destinations[0].kind=Indexer' \
+            --set 'destinations[0].endpoint=indexer.svc' \
+            --set 'destinations[0].port=8081' \
+            --set 'destinations[0].tls=ClearText' \
+            --set serviceMonitor.enabled=true
+
+          # linera-validator-stack (umbrella)
+          render_and_validate helm/linera-validator-stack \
+            --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set linera-validator.validator.existingSecret=validator-config

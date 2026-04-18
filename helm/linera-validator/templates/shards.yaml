@@ -1,0 +1,225 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-shards
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "shards") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.ports.shard }}
+      targetPort: grpc
+    - name: metrics
+      port: {{ .Values.ports.metrics }}
+      targetPort: metrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-shards
+  labels:
+    {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
+spec:
+  serviceName: {{ include "linera-validator.fullname" . }}-shards
+  replicas: {{ .Values.shards.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "linera-validator.componentSelectorLabels" (dict "context" . "component" "shards") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 8 }}
+        {{- with .Values.shards.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.shards.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "linera-validator.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.shards.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.shards.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.shards.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.shards.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.shards.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.shards.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.shards.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: storage-init
+          image: {{ include "linera-validator.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.shards.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              while true; do
+                status=0
+                /linera storage check-existence --storage {{ .Values.storage.uri | quote }} || status=$?
+                case "$status" in
+                  0)
+                    echo "Database already initialized."
+                    exit 0
+                    ;;
+                  1)
+                    echo "Initializing database..."
+                    if /linera storage initialize \
+                         --storage {{ .Values.storage.uri | quote }} \
+                         --genesis /config/genesis.json \
+                         --storage-replication-factor {{ .Values.storage.replicationFactor | quote }}; then
+                      echo "Initialization successful."
+                      exit 0
+                    fi
+                    ;;
+                esac
+                echo "Will retry in 5s (last status: $status)"
+                sleep 5
+              done
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint | quote }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- if .Values.storage.dual }}
+            - name: rocksdb
+              mountPath: /linera.db
+            {{- end }}
+            {{- with .Values.shards.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      containers:
+        - name: linera-server
+          image: {{ include "linera-validator.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.shards.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              ORDINAL="${HOSTNAME##*-}"
+              exec /linera-server run \
+                --storage {{ .Values.storage.uri | quote }} \
+                --server /config/server.json \
+                --shard "$ORDINAL" \
+                --storage-replication-factor {{ .Values.storage.replicationFactor | quote }} \
+                {{- include "linera-validator.cliFlags" .Values.shards.cli | nindent 16 }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.ports.shard }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+              protocol: TCP
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.log.level | quote }}
+            - name: RUST_BACKTRACE
+              value: {{ .Values.log.backtrace | quote }}
+            - name: LINERA_OTLP_EXPORTER_ENDPOINT
+              value: {{ .Values.otlpExporterEndpoint | quote }}
+            {{- with .Values.shards.serverTokioThreads }}
+            - name: LINERA_SERVER_TOKIO_THREADS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.shards.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.shards.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- if .Values.shards.livenessProbe }}
+            {{- toYaml .Values.shards.livenessProbe | nindent 12 }}
+            {{- else }}
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            {{- end }}
+          {{- with .Values.shards.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.shards.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- if .Values.storage.dual }}
+            - name: rocksdb
+              mountPath: /linera.db
+            {{- end }}
+            {{- with .Values.shards.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "linera-validator.configSecretName" . }}
+            items:
+              - key: serverConfig
+                path: server.json
+              - key: genesisConfig
+                path: genesis.json
+        {{- with .Values.shards.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.storage.dual }}
+  volumeClaimTemplates:
+    - metadata:
+        name: rocksdb
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.storage.rocksdbStorageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.rocksdbSize }}
+  {{- end }}

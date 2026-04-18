@@ -1,0 +1,41 @@
+suite: networkpolicy
+templates:
+  - networkpolicy.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing by default (opt-in)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: emits proxy + shards policies when enabled
+    set:
+      networkPolicy.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        equal:
+          path: metadata.name
+          value: rel-linera-validator-proxy
+      - documentIndex: 1
+        equal:
+          path: metadata.name
+          value: rel-linera-validator-shards
+
+  - it: emits default-deny when requested
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.defaultDeny: true
+    asserts:
+      - hasDocuments:
+          count: 3
+      - documentIndex: 2
+        equal:
+          path: metadata.name
+          value: rel-linera-validator-default-deny
+      - documentIndex: 2
+        equal:
+          path: spec.podSelector
+          value: {}

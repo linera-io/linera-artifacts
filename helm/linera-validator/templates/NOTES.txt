@@ -1,0 +1,60 @@
+{{ include "linera-validator.fullname" . }} has been deployed.
+
+Components installed:
+  - {{ .Values.shards.replicas }} shard pod(s)
+  - {{ .Values.proxies.replicas }} proxy pod(s)
+
+{{- if not .Values.image.repository }}
+
+WARNING: image.repository is empty. The pods will not start until you
+set image.repository (and optionally image.tag) to point at a linera
+binary image.
+{{- end }}
+
+{{- if and (not .Values.validator.existingSecret) (not .Values.validator.serverConfigData) }}
+
+WARNING: validator.serverConfigData is empty and validator.existingSecret
+is not set. The pods will fail to start because they have no signing key.
+
+Obtain your per-validator server config (PRIVATE signing key) and the
+network's public genesis.json from the Linera network operators, then
+create a Kubernetes Secret with those two files:
+
+  kubectl --namespace {{ .Release.Namespace }} create secret generic validator-config \
+    --from-file=serverConfig=./server.json \
+    --from-file=genesisConfig=./genesis.json
+
+Upgrade with `--set validator.existingSecret=validator-config`.
+{{- end }}
+
+Check pod status:
+  kubectl --namespace {{ .Release.Namespace }} get pods -l \
+    app.kubernetes.io/instance={{ .Release.Name }}
+
+Tail logs:
+  kubectl --namespace {{ .Release.Namespace }} logs -f \
+    statefulset/{{ include "linera-validator.fullname" . }}-shards
+  kubectl --namespace {{ .Release.Namespace }} logs -f \
+    statefulset/{{ include "linera-validator.fullname" . }}-proxy
+
+{{- if .Values.gateway.enabled }}
+
+Gateway API endpoint:
+  https://{{ .Values.gateway.hostname }}
+{{- else if .Values.ingress.enabled }}
+
+Ingress endpoint(s):
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+
+WARNING: ingress.enabled uses the Kubernetes Ingress API, which has
+been placed in feature freeze upstream. New installs should prefer
+gateway.enabled=true (Gateway API). See:
+https://kubernetes.io/docs/concepts/services-networking/ingress/
+{{- else }}
+
+No external endpoint is exposed. Set gateway.enabled=true
+(recommended) or ingress.enabled=true (legacy) to publish the proxy
+outside the cluster.
+{{- end }}

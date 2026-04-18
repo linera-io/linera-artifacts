@@ -1,0 +1,31 @@
+{{ include "linera-block-exporter.fullname" . }} has been deployed.
+
+Replicas: {{ .Values.exporter.replicas }}
+Storage backend (validator's ScyllaDB): {{ .Values.storage.uri | default "(NOT SET — pods will fail)" }}
+
+Indexer destinations:
+{{- range .Values.destinations }}
+  - {{ .kind }}: {{ .endpoint | default "(NOT SET)" }}:{{ .port }} ({{ .tls }})
+{{- end }}
+
+{{- if not .Values.storage.uri }}
+
+WARNING: storage.uri is empty. The pods will fail to start. Set it to
+the same connection string used by the validator (typically:
+"scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042").
+{{- end }}
+
+{{- if not .Values.image.repository }}
+
+WARNING: image.repository is empty. Set it to an image with the
+linera + linera-exporter binaries (the same image used by the
+validator works).
+{{- end }}
+
+Check pod status:
+  kubectl --namespace {{ .Release.Namespace }} get pods -l \
+    app.kubernetes.io/instance={{ .Release.Name }}
+
+Tail logs:
+  kubectl --namespace {{ .Release.Namespace }} logs -f \
+    statefulset/{{ include "linera-block-exporter.fullname" . }}

@@ -1,0 +1,79 @@
+# GKE production. Workload Identity for IAM, PD-SSD storage, Gateway
+# API for client traffic with cert-manager + external-dns annotations.
+
+image:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  tag: testnet_conway_release
+
+storage:
+  # Points at a ScyllaCluster managed by the linera-validator-stack
+  # umbrella, or any Scylla you already deployed.
+  uri: "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"
+
+shards:
+  replicas: 10
+  resources:
+    requests:
+      cpu: "7"
+      memory: 55Gi
+    limits:
+      cpu: "8"
+      memory: 60Gi
+  nodeSelector:
+    cloud.google.com/gke-nodepool: validator-shards
+  tolerations:
+    - key: linera.io/dedicated
+      value: shards
+      effect: NoSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: shards
+
+proxies:
+  replicas: 3
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      cpu: "4"
+      memory: 12Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: proxy
+
+# Use Gateway API for gRPC. Envoy Gateway is recommended.
+gateway:
+  enabled: true
+  className: envoy
+  hostname: validator.example.com
+  tlsSecretName: validator-tls
+  annotations:
+    # cert-manager creates the Secret named in tlsSecretName.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # external-dns picks the hostname from the Gateway listener.
+    external-dns.alpha.kubernetes.io/hostname: validator.example.com
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: validator@my-project.iam.gserviceaccount.com
+
+validator:
+  existingSecret: validator-config
+
+networkName: testnet-conway
+validatorLabel: gke-validator-1

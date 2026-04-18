@@ -1,0 +1,276 @@
+// Grafana Alloy configuration for Linera validator observability
+// Collects metrics, logs, and traces and forwards to central stack
+
+// ==================== Prometheus Metrics Scraping ====================
+
+// Scrape metrics from proxy service
+prometheus.scrape "proxy_metrics" {
+  targets = [{
+    __address__ = "proxy:21100",
+    job         = "linera-proxy",
+    instance    = env("HOSTNAME"),
+  }]
+
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+// Scrape metrics from all shard services
+prometheus.scrape "shard_metrics" {
+  targets = [
+    {
+      __address__ = "docker-shard-1:21100",
+      job         = "linera-shard",
+      shard       = "0",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-2:21100",
+      job         = "linera-shard",
+      shard       = "1",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-3:21100",
+      job         = "linera-shard",
+      shard       = "2",
+      instance    = env("HOSTNAME"),
+    },
+    {
+      __address__ = "docker-shard-4:21100",
+      job         = "linera-shard",
+      shard       = "3",
+      instance    = env("HOSTNAME"),
+    },
+  ]
+
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+// Scrape container resource metrics from cAdvisor
+prometheus.scrape "cadvisor_metrics" {
+  targets = [{
+    __address__ = "cadvisor:8080",
+    job         = "cadvisor",
+    instance    = env("HOSTNAME"),
+  }]
+
+  forward_to = [prometheus.relabel.cadvisor_filter.receiver]
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+// Filter cAdvisor metrics: keep only what we need with minimal labels
+// Uses labelkeep (whitelist) instead of labeldrop to avoid OTLP 400 errors
+// from unexpected label names or values (long paths, special chars).
+// container_fs_* added on 2026-04-29 so a runaway container log
+// (or any disk hog) shows up before it eats the host filesystem.
+prometheus.relabel "cadvisor_filter" {
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  // Keep only container-level metrics we care about
+  rule {
+    source_labels = ["__name__"]
+    regex         = "container_memory_usage_bytes|container_memory_rss|container_memory_cache|container_spec_memory_limit_bytes|container_cpu_usage_seconds_total|container_start_time_seconds|container_oom_events_total|container_memory_working_set_bytes|container_fs_usage_bytes|container_fs_limit_bytes|container_fs_writes_bytes_total|container_fs_reads_bytes_total"
+    action        = "keep"
+  }
+
+  // Whitelist only the labels we need — drop everything else
+  rule {
+    regex  = "__name__|name|job|instance|device"
+    action = "labelkeep"
+  }
+}
+
+// ==================== Host node_exporter (filesystem, CPU, mem) ====================
+// Built-in unix exporter (= node_exporter) running inside Alloy. Reads
+// host /proc, /sys, / via volume mounts (compose: alloy bind-mounts
+// /:/host/root:ro, /proc:/host/proc:ro, /sys:/host/sys:ro). Without
+// these metrics the central NodeFilesystemSpaceCritical alert can't
+// fire for VM-based validators (incident 2026-04-29: silent disk-full).
+
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host/root"
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+
+  set_collectors = [
+    "filesystem",
+    "diskstats",
+    "loadavg",
+    "meminfo",
+    "cpu",
+    "uname",
+    "stat",
+    "vmstat",
+    "netdev",
+    "time",
+  ]
+
+  filesystem {
+    fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs|ramfs)$"
+    mount_points_exclude = "^/(dev|proc|sys|var/lib/docker/.+|var/lib/containerd/.+|var/lib/kubelet/.+|host/proc|host/sys)($|/)"
+    mount_timeout        = "5s"
+  }
+}
+
+prometheus.scrape "host_metrics" {
+  targets    = prometheus.exporter.unix.host.targets
+  forward_to = [prometheus.relabel.host_relabel.receiver]
+
+  scrape_interval = "30s"
+  scrape_timeout  = "15s"
+}
+
+// Stamp host metrics with HOSTNAME so they group with the rest of the
+// validator's series (proxy/shards already use env("HOSTNAME") as instance).
+prometheus.relabel "host_relabel" {
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  rule {
+    target_label = "instance"
+    replacement  = env("HOSTNAME")
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "node_exporter"
+  }
+}
+
+// Expose Alloy's own metrics
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy_metrics" {
+  targets    = prometheus.exporter.self.alloy.targets
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+}
+
+// ==================== Prometheus Metrics Export ====================
+
+// Convert Prometheus metrics to OTLP and send to external Prometheus
+// Requires: PROMETHEUS_OTLP_URL, PROMETHEUS_OTLP_USER, PROMETHEUS_OTLP_PASS
+
+otelcol.exporter.otlphttp "prometheus" {
+  client {
+    endpoint = env("PROMETHEUS_OTLP_URL")
+
+    auth = otelcol.auth.basic.prometheus_credentials.handler
+
+    tls {
+      insecure_skip_verify = false
+    }
+  }
+
+  encoding = "proto"
+}
+
+otelcol.auth.basic "prometheus_credentials" {
+  username = env("PROMETHEUS_OTLP_USER")
+  password = env("PROMETHEUS_OTLP_PASS")
+}
+
+// Convert Prometheus metrics to OTLP format
+otelcol.receiver.prometheus "default" {
+  output {
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
+  }
+}
+
+// ==================== Loki Logs Collection ====================
+
+// Discover docker containers
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Relabel discovered containers
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+}
+
+// Read docker logs
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_logs.output
+  forward_to = [loki.write.central.receiver]
+}
+
+// Write logs to external Loki
+// Requires: LOKI_PUSH_URL, LOKI_PUSH_USER, LOKI_PUSH_PASS
+loki.write "central" {
+  endpoint {
+    url = env("LOKI_PUSH_URL")
+
+    basic_auth {
+      username = env("LOKI_PUSH_USER")
+      password = env("LOKI_PUSH_PASS")
+    }
+
+    tls_config {
+      insecure_skip_verify = false
+    }
+  }
+
+  external_labels = {
+    cluster   = "validator-docker-compose",
+    validator = env("HOSTNAME"),
+  }
+}
+
+// ==================== Tempo Traces Collection ====================
+
+// OTLP receiver for traces
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.exporter.otlphttp.central.input]
+  }
+}
+
+// Export traces to external Tempo
+// Requires: TEMPO_OTLP_URL, TEMPO_OTLP_USER, TEMPO_OTLP_PASS
+otelcol.exporter.otlphttp "central" {
+  client {
+    endpoint = env("TEMPO_OTLP_URL")
+
+    auth = otelcol.auth.basic.credentials.handler
+
+    tls {
+      insecure_skip_verify = false
+    }
+  }
+}
+
+otelcol.auth.basic "credentials" {
+  username = env("TEMPO_OTLP_USER")
+  password = env("TEMPO_OTLP_PASS")
+}

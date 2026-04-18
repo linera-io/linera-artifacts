@@ -1,0 +1,43 @@
+{{- if .Values.gateway.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "linera-validator.fullname" . }}
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ required ".Values.gateway.className is required when gateway.enabled is true" .Values.gateway.className | quote }}
+  listeners:
+    - name: grpc-tls
+      protocol: HTTPS
+      port: 443
+      hostname: {{ required ".Values.gateway.hostname is required when gateway.enabled is true" .Values.gateway.hostname | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ required ".Values.gateway.tlsSecretName is required when gateway.enabled is true" .Values.gateway.tlsSecretName | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: {{ include "linera-validator.fullname" . }}-proxy
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ include "linera-validator.fullname" . }}
+  hostnames:
+    - {{ .Values.gateway.hostname | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ include "linera-validator.fullname" . }}-proxy
+          port: {{ .Values.ports.proxy }}
+{{- end }}
