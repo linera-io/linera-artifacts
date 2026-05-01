@@ -1,0 +1,718 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "commonLabels": {
+            "description": "Extra labels applied to every resource produced by the chart.",
+            "type": "object"
+        },
+        "dashboards": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Emit ConfigMaps labelled for the Grafana sidecar to pick up (https://github.com/grafana/helm-charts/tree/main/charts/grafana). OPT-IN: requires your Grafana install to have dashboard sidecar enabled. Most operators ship dashboards via their own GitOps, this stays out of the way by default.",
+                    "type": "boolean"
+                },
+                "label": {
+                    "description": "Label the Grafana sidecar searches for. Most installs use `grafana_dashboard=1`; adjust if yours differs.",
+                    "type": "string"
+                },
+                "labelValue": {
+                    "type": "string"
+                }
+            }
+        },
+        "fullnameOverride": {
+            "description": "Optional override of the chart's full name (used as resource name prefix).",
+            "type": "string"
+        },
+        "gateway": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "Extra annotations on the Gateway resource (e.g. for external-dns / cert-manager integration).",
+                    "type": "object"
+                },
+                "className": {
+                    "description": "gatewayClassName (e.g. \"envoy\").",
+                    "type": "string"
+                },
+                "enabled": {
+                    "description": "**Recommended.** Create a Gateway API Gateway + GRPCRoute. Gateway API is the Kubernetes-recommended successor to Ingress (\u003chttps://kubernetes.io/docs/concepts/services-networking/ingress/\u003e). Requires a Gateway API implementation in the cluster — Envoy Gateway (\u003chttps://gateway.envoyproxy.io/\u003e) is a common pick and what we test against.",
+                    "type": "boolean"
+                },
+                "envoyBackendTrafficPolicy": {
+                    "description": "Envoy Gateway BackendTrafficPolicy targeting the validator GRPCRoute. Bumps the upstream cluster's circuit-breaker limits and HTTP/2 stream cap so bursty browser-driven gRPC-Web traffic doesn't hit Envoy's defaults (max_connections=1024, max_pending_requests= 1024, max_requests=1024) and surface to clients as 503 with `response_flags=UO` (upstream overflow). Browsers mislabel these 503s as CORS errors because no Allow-Origin header rides on a 5xx response — without this policy a public validator looks broken from a browser when traffic spikes even though the proxy itself is healthy.  Envoy Gateway only — opt-in for portability. Other Gateway API implementations need their own equivalent (e.g. Istio `DestinationRule.connectionPool`).",
+                    "type": "object",
+                    "properties": {
+                        "circuitBreaker": {
+                            "type": "object",
+                            "properties": {
+                                "maxConnections": {
+                                    "type": "integer"
+                                },
+                                "maxParallelRequests": {
+                                    "type": "integer"
+                                },
+                                "maxParallelRetries": {
+                                    "type": "integer"
+                                },
+                                "maxPendingRequests": {
+                                    "type": "integer"
+                                },
+                                "maxRequestsPerConnection": {
+                                    "type": "integer"
+                                }
+                            }
+                        },
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "http2": {
+                            "type": "object",
+                            "properties": {
+                                "initialConnectionWindowSize": {
+                                    "type": "integer"
+                                },
+                                "initialStreamWindowSize": {
+                                    "type": "integer"
+                                },
+                                "maxConcurrentStreams": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                },
+                "hostname": {
+                    "description": "Hostname for the validator. external-dns can manage the corresponding DNS record from this annotation.",
+                    "type": "string"
+                },
+                "tlsSecretName": {
+                    "description": "TLS Secret produced by cert-manager (or any other source).",
+                    "type": "string"
+                }
+            }
+        },
+        "image": {
+            "type": "object",
+            "properties": {
+                "pullPolicy": {
+                    "description": "Image pull policy.",
+                    "type": "string"
+                },
+                "pullSecrets": {
+                    "description": "Pull secrets for private registries.",
+                    "type": "array"
+                },
+                "repository": {
+                    "description": "Image repository for the linera binaries (REQUIRED).",
+                    "type": "string"
+                },
+                "tag": {
+                    "description": "Image tag. Defaults to .Chart.appVersion if empty.",
+                    "type": "string"
+                }
+            }
+        },
+        "ingress": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "type": "object"
+                },
+                "className": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "description": "**DEPRECATED / maintenance mode.** Create a Kubernetes Ingress. The Kubernetes project has placed the Ingress API in feature freeze and recommends Gateway API for new deployments — see \u003chttps://kubernetes.io/docs/concepts/services-networking/ingress/\u003e. Prefer the `gateway` block below for new installs. This option is kept for operators whose clusters only ship an Ingress controller.",
+                    "type": "boolean"
+                },
+                "hosts": {
+                    "type": "array"
+                },
+                "tls": {
+                    "type": "array"
+                }
+            }
+        },
+        "log": {
+            "type": "object",
+            "properties": {
+                "backtrace": {
+                    "description": "RUST_BACKTRACE value. \"0\" (default): no Rust stack traces in logs. Anyhow error chains (`0: ..., 1: ...`) are still emitted — those are the useful part; only the tokio runtime frames disappear. \"1\":           short backtrace (file + line per frame). \"full\":        full symbolic backtrace. Only set this when actively debugging — it makes routine errors look like panics.",
+                    "type": "string"
+                },
+                "level": {
+                    "description": "RUST_LOG value applied to every linera process.",
+                    "type": "string"
+                }
+            }
+        },
+        "nameOverride": {
+            "description": "Optional override of the chart name.",
+            "type": "string"
+        },
+        "networkName": {
+            "description": "Network identifier (used for service discovery in some optional subcomponents). Free-form, e.g. \"testnet-conway\" or \"my-network\".",
+            "type": "string"
+        },
+        "networkPolicy": {
+            "type": "object",
+            "properties": {
+                "defaultDeny": {
+                    "description": "Add a deny-all NetworkPolicy that covers every pod in the release namespace. Only flip on if you've audited the other workloads in this namespace — this will break any pod that lacks an explicit allow rule.",
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "description": "Emit NetworkPolicy resources (proxy + shards + optional default-deny). Harmless on clusters without an enforcer.",
+                    "type": "boolean"
+                },
+                "extraEgress": {
+                    "description": "Extra egress rules, appended to both proxy and shard policies. Must include at least your storage backend (ScyllaDB, RocksDB sidecar endpoint, etc.) and any observability push targets.",
+                    "type": "array"
+                },
+                "metricsScrapeFrom": {
+                    "description": "Sources allowed to scrape /metrics on proxies + shards. Common override: your Prometheus / Alloy namespace.",
+                    "type": "array"
+                },
+                "proxyIngressFrom": {
+                    "description": "Sources allowed to reach the proxy on the client port. Leave empty to allow from anywhere (public gRPC endpoint). Typical override: restrict to an ingress/gateway namespace.",
+                    "type": "array"
+                }
+            }
+        },
+        "otlpExporterEndpoint": {
+            "description": "OpenTelemetry OTLP endpoint. Empty = tracing disabled.",
+            "type": "string"
+        },
+        "ports": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "description": "Prometheus metrics port (every component listens here).",
+                    "type": "integer"
+                },
+                "proxy": {
+                    "description": "gRPC port the proxy listens on for client connections.",
+                    "type": "integer"
+                },
+                "proxyInternal": {
+                    "description": "gRPC port for inter-proxy communication.",
+                    "type": "integer"
+                },
+                "shard": {
+                    "description": "gRPC port for shard inter-process communication.",
+                    "type": "integer"
+                }
+            }
+        },
+        "prometheusRule": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Create a PrometheusRule with the default Linera alerts (validator down, shard restart, proxy high latency). Extend with extraRules below. OPT-IN: requires prometheus-operator + the PrometheusRule CRD installed in the cluster.",
+                    "type": "boolean"
+                },
+                "extraRules": {
+                    "description": "Additional alert / recording rules merged into the default set.",
+                    "type": "array"
+                },
+                "labels": {
+                    "description": "Extra labels on the PrometheusRule (match your Prometheus's ruleSelector if it filters by label).",
+                    "type": "object"
+                },
+                "recordingRules": {
+                    "description": "Pre-computed recording rules (`linera:*:rate1m` aggregates over execution, request, storage, view metrics). Useful when a local monitoring stack answers Grafana queries and you want faster long-window panels. Leave OFF when metrics are forwarded to a central backend that already does its own recording.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        }
+                    }
+                }
+            }
+        },
+        "proxies": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object",
+                    "properties": {
+                        "podAntiAffinity": {
+                            "type": "object",
+                            "properties": {
+                                "requiredDuringSchedulingIgnoredDuringExecution": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "labelSelector": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "matchLabels": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "app.kubernetes.io/component": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "topologyKey": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "cli": {
+                    "description": "linera-proxy CLI flags. Same conventions as shards.cli (every flag is the values currently in use on the testnet-conway validators.",
+                    "type": "object",
+                    "properties": {
+                        "blobCacheSize": {
+                            "type": "integer"
+                        },
+                        "certificateCacheSize": {
+                            "type": "integer"
+                        },
+                        "certificateRawCacheSize": {
+                            "type": "integer"
+                        },
+                        "confirmedBlockCacheSize": {
+                            "type": "integer"
+                        },
+                        "eventCacheSize": {
+                            "type": "integer"
+                        },
+                        "extraArgs": {
+                            "type": "array"
+                        },
+                        "storageMaxCacheEntries": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheFindKeyValuesSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheFindKeysSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheValueSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxFindKeyValuesEntrySize": {
+                            "type": "integer"
+                        },
+                        "storageMaxFindKeysEntrySize": {
+                            "type": "integer"
+                        },
+                        "storageMaxValueEntrySize": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "extraEnv": {
+                    "description": "Extra environment variables.",
+                    "type": "array"
+                },
+                "extraVolumeMounts": {
+                    "type": "array"
+                },
+                "extraVolumes": {
+                    "description": "Extra volumes / volume mounts.",
+                    "type": "array"
+                },
+                "livenessProbe": {
+                    "description": "Probe overrides.",
+                    "type": "object"
+                },
+                "nodeSelector": {
+                    "description": "Pod scheduling. Default podAntiAffinity (hard, by hostname) keeps each proxy on a distinct node so PDB minAvailable holds during a node drain. Operators on a single-node cluster must override `affinity` here OR keep replicas: 1.",
+                    "type": "object"
+                },
+                "podAnnotations": {
+                    "description": "Pod annotations and labels.",
+                    "type": "object"
+                },
+                "podDisruptionBudget": {
+                    "description": "PodDisruptionBudget for the proxy pods. Protects against simultaneous evictions during node drains / voluntary disruptions. Set only one of `minAvailable` / `maxUnavailable`. Not created for shards by design: each shard holds a unique slice of validator state, so any voluntary disruption is a correctness risk — operators must drain shards manually.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "maxUnavailable": {
+                            "description": "Maximum proxy pods that may be unavailable at once. Leave unset when `minAvailable` is used.",
+                            "type": [
+                                "integer",
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "minAvailable": {
+                            "description": "Minimum proxy pods that must stay available (integer or percentage string like \"50%\"). Mutually exclusive with `maxUnavailable`.",
+                            "type": "integer"
+                        }
+                    }
+                },
+                "podLabels": {
+                    "type": "object"
+                },
+                "podSecurityContext": {
+                    "description": "Pod-level security context.",
+                    "type": "object"
+                },
+                "priorityClassName": {
+                    "description": "Pod priority class name.",
+                    "type": "string"
+                },
+                "readinessProbe": {
+                    "type": "object"
+                },
+                "replicas": {
+                    "description": "Number of proxy replicas. Default 2 + PDB minAvailable=1 below tolerates one node drain without losing client-facing traffic. Single-node clusters must set replicas: 1 and disable podDisruptionBudget.",
+                    "type": "integer"
+                },
+                "resources": {
+                    "description": "Resource requests and limits. Defaults sized from observed steady state on the testnet-conway production validators (GKE, no resource cap historically): linera-proxy plateaus around 3.5 GiB p50 / 4.0 GiB p95 / 5.0 GiB max per replica, with ~0.45 cpu p95 and ~0.66 cpu max. Set as Burstable QoS. Operators with very different traffic should override here.",
+                    "type": "object",
+                    "properties": {
+                        "limits": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "string"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "requests": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "string"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "securityContext": {
+                    "description": "Container-level security context.",
+                    "type": "object"
+                },
+                "service": {
+                    "description": "External Service for client traffic.",
+                    "type": "object",
+                    "properties": {
+                        "annotations": {
+                            "description": "Annotations on the proxy Service (e.g. cloud LB hints).",
+                            "type": "object"
+                        },
+                        "loadBalancerIP": {
+                            "description": "Optional static IP (for cloud providers that respect this).",
+                            "type": "string"
+                        },
+                        "type": {
+                            "description": "Service type. ClusterIP for in-cluster only, LoadBalancer for cloud LBs, NodePort for bare-metal exposure.",
+                            "type": "string"
+                        }
+                    }
+                },
+                "startupProbe": {
+                    "type": "object"
+                },
+                "terminationGracePeriodSeconds": {
+                    "description": "Termination grace period in seconds.",
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array"
+                },
+                "topologySpreadConstraints": {
+                    "type": "array"
+                }
+            }
+        },
+        "serviceAccount": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "Annotations applied to the ServiceAccount (useful for workload-identity setups).",
+                    "type": "object"
+                },
+                "create": {
+                    "description": "Create a ServiceAccount.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "ServiceAccount name. Empty = derived from chart name.",
+                    "type": "string"
+                }
+            }
+        },
+        "serviceMonitor": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Create a ServiceMonitor so a Prometheus Operator can scrape both shards and proxies. OPT-IN: most operators wire scraping with their own observability stack, this chart stays out of the way. Enable only if you run prometheus-operator in the same cluster.",
+                    "type": "boolean"
+                },
+                "interval": {
+                    "description": "Scrape interval.",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "Extra labels on the ServiceMonitor (e.g. release: prometheus if your Prometheus selects by that label).",
+                    "type": "object"
+                },
+                "scrapeTimeout": {
+                    "description": "Scrape timeout.",
+                    "type": "string"
+                }
+            }
+        },
+        "shards": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object",
+                    "properties": {
+                        "podAntiAffinity": {
+                            "type": "object",
+                            "properties": {
+                                "requiredDuringSchedulingIgnoredDuringExecution": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "labelSelector": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "matchLabels": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "app.kubernetes.io/component": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "topologyKey": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "cli": {
+                    "description": "linera-server CLI flags. Every flag is passed as `--\u003ckebab-case-key\u003e \u003cvalue\u003e` and is omitted entirely when the value is null. Defaults are the values currently in use on the Linera testnet-conway validators. Override per cluster as needed.",
+                    "type": "object",
+                    "properties": {
+                        "blobCacheSize": {
+                            "type": "integer"
+                        },
+                        "blockCacheSize": {
+                            "type": "integer"
+                        },
+                        "certificateCacheSize": {
+                            "type": "integer"
+                        },
+                        "certificateRawCacheSize": {
+                            "type": "integer"
+                        },
+                        "confirmedBlockCacheSize": {
+                            "type": "integer"
+                        },
+                        "eventCacheSize": {
+                            "type": "integer"
+                        },
+                        "executionStateCacheSize": {
+                            "type": "integer"
+                        },
+                        "extraArgs": {
+                            "description": "Free-form extra arguments appended verbatim to the linera-server command line. Each entry is added on its own line.",
+                            "type": "array"
+                        },
+                        "storageMaxCacheEntries": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheFindKeyValuesSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheFindKeysSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxCacheValueSize": {
+                            "type": "integer"
+                        },
+                        "storageMaxFindKeyValuesEntrySize": {
+                            "type": "integer"
+                        },
+                        "storageMaxFindKeysEntrySize": {
+                            "type": "integer"
+                        },
+                        "storageMaxValueEntrySize": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "extraEnv": {
+                    "description": "Extra environment variables added to the shard container.",
+                    "type": "array"
+                },
+                "extraVolumeMounts": {
+                    "type": "array"
+                },
+                "extraVolumes": {
+                    "description": "Extra volumes / volume mounts (for advanced use cases).",
+                    "type": "array"
+                },
+                "livenessProbe": {
+                    "description": "Probe overrides. Empty = sensible defaults baked into the template.",
+                    "type": "object"
+                },
+                "nodeSelector": {
+                    "description": "Pod scheduling. Default podAntiAffinity (hard, by hostname) keeps each shard on a distinct node so a single node loss takes out at most one shard. Operators on smaller clusters (fewer nodes than shard replicas) must override `affinity` here OR add more nodes, otherwise excess shards stay Pending.",
+                    "type": "object"
+                },
+                "podAnnotations": {
+                    "description": "Pod annotations.",
+                    "type": "object"
+                },
+                "podLabels": {
+                    "description": "Pod labels (in addition to the default app.kubernetes.io/* labels).",
+                    "type": "object"
+                },
+                "podSecurityContext": {
+                    "description": "Pod-level security context.",
+                    "type": "object"
+                },
+                "priorityClassName": {
+                    "description": "Pod priority class name.",
+                    "type": "string"
+                },
+                "readinessProbe": {
+                    "type": "object"
+                },
+                "replicas": {
+                    "description": "Number of shard replicas.",
+                    "type": "integer"
+                },
+                "resources": {
+                    "description": "Resource requests and limits. Defaults sized from observed steady state on the testnet-conway production validators (GKE, no resource cap historically): linera-server plateaus around 6.8 GiB p50 / 8.5 GiB p95 / 9.5 GiB max per shard, with bursty \u003c0.5 cpu p95 and ~0.6 cpu max. Set as Burstable QoS — req covers steady state, lim covers plateau + ~25 % headroom. Operators with very different chain workloads should override here.",
+                    "type": "object",
+                    "properties": {
+                        "limits": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "string"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "requests": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "string"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "securityContext": {
+                    "description": "Container-level security context.",
+                    "type": "object"
+                },
+                "serverTokioThreads": {
+                    "description": "Tokio worker threads per shard. Empty = one per CPU (Tokio default).",
+                    "type": "string"
+                },
+                "startupProbe": {
+                    "type": "object"
+                },
+                "terminationGracePeriodSeconds": {
+                    "description": "Termination grace period in seconds.",
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array"
+                },
+                "topologySpreadConstraints": {
+                    "type": "array"
+                }
+            }
+        },
+        "storage": {
+            "type": "object",
+            "properties": {
+                "dual": {
+                    "description": "Enable dual storage mode (RocksDB local + ScyllaDB remote). Recommended for development only.",
+                    "type": "boolean"
+                },
+                "replicationFactor": {
+                    "description": "Storage replication factor (must match the ScyllaDB cluster RF).",
+                    "type": "integer"
+                },
+                "rocksdbSize": {
+                    "description": "RocksDB volume size per shard (only used when storage.dual is true).",
+                    "type": "string"
+                },
+                "rocksdbStorageClass": {
+                    "description": "StorageClass for the RocksDB PVCs. Empty = cluster default.",
+                    "type": "string"
+                },
+                "uri": {
+                    "description": "Connection string passed to --storage. Default points to a ScyllaDB cluster in the \"scylla\" namespace (what the linera-validator-stack umbrella chart provisions). Override for a different backend.",
+                    "type": "string"
+                }
+            }
+        },
+        "validator": {
+            "type": "object",
+            "properties": {
+                "existingSecret": {
+                    "description": "Use an existing Secret instead of inlining configs above. The Secret must contain two keys: \"serverConfig\" and \"genesisConfig\".",
+                    "type": "string"
+                },
+                "genesisConfigData": {
+                    "description": "Genesis config JSON (public). Distributed to every validator in the same network. Inline as a string here, or use existingSecret.",
+                    "type": "string"
+                },
+                "serverConfigData": {
+                    "description": "Server config JSON (PRIVATE — contains the validator signing key). Inline as a string here, or use existingSecret.",
+                    "type": "string"
+                }
+            }
+        },
+        "validatorLabel": {
+            "description": "Validator label exposed to external monitoring systems. Free-form, e.g. \"validator-1\" or \"us-east-pilot\".",
+            "type": "string"
+        }
+    }
+}

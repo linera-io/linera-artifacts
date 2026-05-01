@@ -21,7 +21,7 @@ home: https://linera.io
 sources:
   - https://github.com/linera-io/linera-artifacts
   - https://github.com/linera-io/linera-protocol
-icon: https://avatars.githubusercontent.com/u/107454978
+icon: https://raw.githubusercontent.com/linera-io/linera-artifacts/main/assets/linera-logo.svg
 keywords:
   - linera
   - blockchain

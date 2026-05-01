@@ -336,6 +336,7 @@ proxies:
     # percentage string like "50%"). Mutually exclusive with
     # `maxUnavailable`.
     minAvailable: 1
+    # @schema type: [integer, string, "null"]
     # -- Maximum proxy pods that may be unavailable at once. Leave
     # unset when `minAvailable` is used.
     maxUnavailable: null

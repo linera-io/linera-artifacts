@@ -1,0 +1,299 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "committeeDestination": {
+            "type": "boolean"
+        },
+        "commonLabels": {
+            "type": "object"
+        },
+        "destinations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "description": "DNS name or IP of the indexer.",
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "port": {
+                        "description": "gRPC port of the indexer.",
+                        "type": "integer"
+                    },
+                    "tls": {
+                        "description": "TLS mode: \"ClearText\" (in-cluster) or \"Tls\" (e.g. external indexer behind a Gateway with cert-manager TLS).",
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "exporter": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object"
+                },
+                "extraEnv": {
+                    "type": "array"
+                },
+                "extraVolumeMounts": {
+                    "type": "array"
+                },
+                "extraVolumes": {
+                    "type": "array"
+                },
+                "indexerReadinessCheck": {
+                    "description": "Wait for each indexer destination to respond before starting.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "image": {
+                            "description": "Image used for the curl probe. Defaults to upstream curlimages/curl.",
+                            "type": "string"
+                        },
+                        "retryIntervalSeconds": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "livenessProbe": {
+                    "type": "object"
+                },
+                "nodeSelector": {
+                    "description": "Pod scheduling.",
+                    "type": "object"
+                },
+                "persistence": {
+                    "description": "Persistent volume claim template for exporter state. Disable for ephemeral storage (data lost on pod restart).",
+                    "type": "object",
+                    "properties": {
+                        "accessMode": {
+                            "type": "string"
+                        },
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "size": {
+                            "type": "string"
+                        },
+                        "storageClass": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "podAnnotations": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
+                },
+                "podSecurityContext": {
+                    "type": "object",
+                    "properties": {
+                        "fsGroup": {
+                            "type": "integer"
+                        },
+                        "runAsNonRoot": {
+                            "type": "boolean"
+                        },
+                        "runAsUser": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "priorityClassName": {
+                    "type": "string"
+                },
+                "readinessProbe": {
+                    "type": "object"
+                },
+                "replicas": {
+                    "description": "Number of exporter replicas. Each replica gets its own TOML config (id = pod ordinal) so they can shard the work.",
+                    "type": "integer"
+                },
+                "resources": {
+                    "description": "Resource requests and limits.",
+                    "type": "object"
+                },
+                "securityContext": {
+                    "type": "object",
+                    "properties": {
+                        "allowPrivilegeEscalation": {
+                            "type": "boolean"
+                        },
+                        "capabilities": {
+                            "type": "object",
+                            "properties": {
+                                "drop": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        },
+                        "readOnlyRootFilesystem": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "startupProbe": {
+                    "type": "object"
+                },
+                "storageInitCheck": {
+                    "description": "Wait for the validator's database to exist before starting.",
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "retryIntervalSeconds": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array"
+                },
+                "topologySpreadConstraints": {
+                    "type": "array"
+                }
+            }
+        },
+        "fullnameOverride": {
+            "type": "string"
+        },
+        "image": {
+            "type": "object",
+            "properties": {
+                "pullPolicy": {
+                    "type": "string"
+                },
+                "pullSecrets": {
+                    "type": "array"
+                },
+                "repository": {
+                    "description": "Image with the linera + linera-exporter binaries (REQUIRED). The same image used by linera-validator works.",
+                    "type": "string"
+                },
+                "tag": {
+                    "description": "Image tag. Defaults to .Chart.appVersion when empty.",
+                    "type": "string"
+                }
+            }
+        },
+        "limits": {
+            "type": "object",
+            "properties": {
+                "auxiliaryCacheSizeMb": {
+                    "type": "integer"
+                },
+                "blobCacheItemsCapacity": {
+                    "type": "integer"
+                },
+                "blobCacheWeightMb": {
+                    "type": "integer"
+                },
+                "blockCacheItemsCapacity": {
+                    "type": "integer"
+                },
+                "blockCacheWeightMb": {
+                    "type": "integer"
+                },
+                "persistencePeriodMs": {
+                    "type": "integer"
+                },
+                "workQueueSize": {
+                    "type": "integer"
+                }
+            }
+        },
+        "log": {
+            "type": "object",
+            "properties": {
+                "backtrace": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "string"
+                }
+            }
+        },
+        "nameOverride": {
+            "type": "string"
+        },
+        "ports": {
+            "type": "object",
+            "properties": {
+                "grpc": {
+                    "description": "gRPC port the exporter exposes for service-config peers.",
+                    "type": "integer"
+                },
+                "metrics": {
+                    "description": "Prometheus metrics port.",
+                    "type": "integer"
+                }
+            }
+        },
+        "service": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "type": "object"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "serviceAccount": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "type": "object"
+                },
+                "create": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "serviceMonitor": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "interval": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object"
+                },
+                "scrapeTimeout": {
+                    "type": "string"
+                }
+            }
+        },
+        "storage": {
+            "type": "object",
+            "properties": {
+                "uri": {
+                    "description": "Connection string for the validator's storage backend. Same value passed to linera-validator (typically \"scylladb:tcp:scylla-client.scylla .svc.cluster.local:9042\"). The exporter reads blocks from this database.",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,197 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+        "linera-block-exporter": {
+            "description": "--------------------------------------------------------------------------- linera-block-exporter (optional, recommended) ",
+            "type": "object",
+            "properties": {
+                "destinations": {
+                    "type": "array"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "storage": {
+                    "type": "object",
+                    "properties": {
+                        "uri": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "linera-validator": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "scylla": {
+            "description": "--------------------------------------------------------------------------- ScyllaCluster CR (rendered as a template by this umbrella) Requires scylla-operator to be installed in the cluster (CRDs). Set scylla.enabled=false to bring your own storage backend. ",
+            "type": "object",
+            "properties": {
+                "agentImage": {
+                    "type": "string"
+                },
+                "agentVersion": {
+                    "type": "string"
+                },
+                "backups": {
+                    "description": "Backup schedule (Scylla Manager). Set to {} to disable.",
+                    "type": "object",
+                    "properties": {
+                        "cron": {
+                            "type": "string"
+                        },
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "keyspaces": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "location": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "numRetries": {
+                            "type": "integer"
+                        },
+                        "rateLimit": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "retentionDays": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "config": {
+                    "description": "ConfigMap consumed by the ScyllaCluster as its scylla.yaml. Created in the same namespace as the cluster.",
+                    "type": "object",
+                    "properties": {
+                        "create": {
+                            "type": "boolean"
+                        },
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "commitlog_segment_size_in_mb": {
+                                    "type": "integer"
+                                },
+                                "query_tombstone_page_limit": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                },
+                "datacenter": {
+                    "description": "Datacenter name (informational, exposed as a Scylla DC label).",
+                    "type": "string"
+                },
+                "developerMode": {
+                    "description": "Enable ScyllaCluster developerMode. Skips strict cpuset/CPU pinning, fewer resource checks. NEVER set true in production — only useful for kind / minikube / single-node test clusters.",
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "ScyllaCluster name. Used by the auto-generated client Service (scylla-client.\u003cnamespace\u003e.svc.cluster.local).",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "Namespace where the ScyllaCluster lives. The chart does NOT create this namespace — create it ahead of time or let scylla-operator do it.",
+                    "type": "string"
+                },
+                "rack": {
+                    "description": "One ScyllaCluster rack. Add more entries to spread across racks.",
+                    "type": "object",
+                    "properties": {
+                        "members": {
+                            "type": "integer"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "placement": {
+                            "type": "object",
+                            "properties": {
+                                "nodeAffinity": {
+                                    "type": "object"
+                                },
+                                "tolerations": {
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "resources": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "storage": {
+                            "type": "object",
+                            "properties": {
+                                "capacity": {
+                                    "type": "string"
+                                },
+                                "storageClassName": {
+                                    "description": "StorageClass for the Scylla PVCs. Empty = cluster default (rarely what you want for ScyllaDB).  Recommended values by provider: GKE, regional PD-SSD:                   \"premium-rwo\" GKE, zonal local SSDs (NVMe, fastest): \"local-ssd-resource-adapter\" (requires the Local SSD CSI driver enabled on the cluster and matching nodepool with EKS, gp3 SSD:                          \"gp3\" AKS, Premium SSD v2:                   \"managed-premium\" OVH, managed control plane SSD:        \"csi-cinder-high-speed\" Bare metal, local NVMe:                \"local-path\" (Rancher) or a custom provisioner  If you only have HDD-backed storage you will not meet Scylla's on a bare-metal host instead.",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "scyllaImage": {
+                    "type": "string"
+                },
+                "scyllaVersion": {
+                    "description": "Container image versions. Defaults match the testnet-conway production validators.",
+                    "type": "string"
+                },
+                "sysctls": {
+                    "description": "Sysctls applied at the node level by the ScyllaCluster spec.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}
