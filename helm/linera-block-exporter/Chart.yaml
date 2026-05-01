@@ -11,7 +11,7 @@ description: |
   standalone: it depends on a running validator's database.
 type: application
 
-version: 0.1.0
+version: 0.1.1
 appVersion: "0.13.0"
 
 home: https://linera.io
