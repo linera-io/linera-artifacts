@@ -48,13 +48,18 @@ jobs:
         with:
           version: v3.16.0
 
-      - name: helm registry login
-        env:
-          PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$PASSWORD" | helm registry login "$REGISTRY" \
-            --username "${{ github.actor }}" \
-            --password-stdin
+      # Single docker login that writes credentials to ~/.docker/config.json.
+      # All three OCI clients used below (helm push, oras push, cosign sign)
+      # read from that file, so a single login covers all of them. Helm's
+      # own `helm registry login` writes to a different config path that
+      # cosign does NOT read, which is why the standalone helm login below
+      # was leaving cosign sign on a 401 against the same registry it had
+      # just pushed to.
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: sigstore/cosign-installer@v3.7.0
         with:
