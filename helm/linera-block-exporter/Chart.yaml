@@ -41,4 +41,4 @@ annotations:
     - kind: added
       description: Initial release of the block exporter side-car chart.
   artifacthub.io/recommendations: |
-    - url: https://artifacthub.io/packages/helm/linera/linera-validator
+    - url: https://artifacthub.io/packages/helm/linera-io/linera-validator
