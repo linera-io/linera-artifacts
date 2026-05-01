@@ -1,0 +1,17 @@
+# Artifact Hub repository metadata for the linera-validator chart.
+#
+# Populated after registering on artifacthub.io:
+#   1. Add OCI repo on artifacthub.io with URL
+#      oci://ghcr.io/linera-io/charts/linera-validator
+#      (registration assigns a UUID immediately; the chart can be
+#      added before any OCI artifact exists).
+#   2. Copy the assigned repositoryID UUID into the field below.
+#   3. Tag the repo (e.g. v0.1.0) — release.yaml publishes both the
+#      chart and this metadata file as OCI artifacts; Artifact Hub
+#      verifies ownership on its next index pass and the verified
+#      publisher badge appears.
+
+repositoryID: ""  # UUID issued by Artifact Hub after registration.
+owners:
+  - name: Linera infrastructure team
+    email: infra@linera.io
