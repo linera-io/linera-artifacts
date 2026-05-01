@@ -11,7 +11,7 @@
 #      verifies ownership on its next index pass and the verified
 #      publisher badge appears.
 
-repositoryID: ""  # UUID issued by Artifact Hub after registration.
+repositoryID: "27b88d7d-dd20-4cd6-a2ed-2ad435679285"
 owners:
   - name: Linera infrastructure team
     email: infra@linera.io
