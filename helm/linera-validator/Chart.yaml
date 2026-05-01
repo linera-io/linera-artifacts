@@ -46,8 +46,8 @@ annotations:
     - kind: added
       description: Initial release of the standalone validator chart.
   artifacthub.io/recommendations: |
-    - url: https://artifacthub.io/packages/helm/linera/linera-validator-stack
-    - url: https://artifacthub.io/packages/helm/linera/linera-block-exporter
+    - url: https://artifacthub.io/packages/helm/linera-io/linera-validator-stack
+    - url: https://artifacthub.io/packages/helm/linera-io/linera-block-exporter
   artifacthub.io/screenshots: |
     - title: Linera testnet
       url: https://linera.io/img/og.png
