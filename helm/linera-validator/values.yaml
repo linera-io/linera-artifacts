@@ -147,7 +147,7 @@ shards:
     # In-memory caches — entry counts.
     blobCacheSize: 1000
     confirmedBlockCacheSize: 10000
-    liteCertificateCacheSize: 5000
+    certificateCacheSize: 5000
     certificateRawCacheSize: 50000
     eventCacheSize: 20000
     blockCacheSize: 20000
@@ -252,7 +252,7 @@ proxies:
     storageMaxCacheFindKeyValuesSize: 10000000
     blobCacheSize: 1000
     confirmedBlockCacheSize: 10000
-    liteCertificateCacheSize: 5000
+    certificateCacheSize: 5000
     certificateRawCacheSize: 50000
     eventCacheSize: 20000
     extraArgs: []
