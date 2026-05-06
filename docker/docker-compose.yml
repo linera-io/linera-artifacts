@@ -110,11 +110,16 @@ services:
       - "${SCYLLA_DEVELOPER_MODE:-0}"
       - "--overprovisioned"
       - "${SCYLLA_OVERPROVISIONED:-1}"
-      # NOTE: uncomment --smp on a fresh deploy to match CPU limits.
-      # Changing it later requires a full data wipe (tablets don't
-      # support shrinking the shard count).
-      # - "--smp"
-      # - "${LIMIT_CPUS_SCYLLA:-2}"
+      # Bind ScyllaDB to the same CPU and memory budget as the cgroup limits
+      # below. Without these flags, ScyllaDB auto-detects shards from the
+      # host's nproc and divides cgroup memory across them, which fails on
+      # 32+ core hosts because per-shard memory drops below the 1 GiB floor.
+      # WARNING: --smp can only be INCREASED on existing data. Reducing it
+      # requires wiping the scylla volume and re-syncing from genesis.
+      - "--smp"
+      - "${SCYLLA_SMP:-${LIMIT_CPUS_SCYLLA:-4}}"
+      - "--memory"
+      - "${SCYLLA_MEMORY:-${LIMIT_MEM_SCYLLA:-30G}}"
     healthcheck:
       test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
       interval: ${SCYLLA_HEALTHCHECK_INTERVAL:-10s}

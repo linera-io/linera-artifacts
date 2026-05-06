@@ -13,6 +13,9 @@ auto-updates via Watchtower, host-level Scylla tuning all wired up.
 
 ### Prerequisites
 
+- Hardware that meets the [recommended tier](HARDWARE.md) — 16-core /
+  64 GB / NVMe SSD. Slower disks (HDD, network-attached storage) cause
+  ScyllaDB to backpressure and OOM-kill the validator shards.
 - Docker + docker compose plugin
 - A public DNS name pointing at this host (for Let's Encrypt)
 - Ports 80 and 443 reachable from the internet
