@@ -121,44 +121,49 @@ Key variables:
 | `LINERA_EXECUTION_STATE_CACHE_SIZE` | `5000`                  | Upstream default is 10000 — lower to save RAM.                                             |
 | `LINERA_BLOCK_CACHE_SIZE` | `2500`                            | Upstream default is 5000 — lower to save RAM.                                              |
 | `WATCHTOWER_INTERVAL` | `30`                                  | Seconds between image-update checks.                                                       |
-| `LIMIT_CPUS_SCYLLA`   | `4`                                   | CPU budget for ScyllaDB. Also drives `--smp` (shard count). See **ScyllaDB sizing** below. |
-| `LIMIT_MEM_SCYLLA`    | `30G`                                 | Memory budget for ScyllaDB. Also passed as `--memory`. See **ScyllaDB sizing** below.       |
+| `LIMIT_CPUS_SCYLLA`   | `4`                                   | CPU cgroup budget for ScyllaDB. Also drives `--smp` (shard count). See **ScyllaDB sizing** below. |
+| `LIMIT_MEM_SCYLLA`    | `30G`                                 | Memory cgroup budget for the ScyllaDB container. ScyllaDB reads this and reserves its own headroom — see below. |
 | `SCYLLA_SMP`          | `${LIMIT_CPUS_SCYLLA}`                | Override the shard count independently of the CPU limit. Rarely needed.                    |
-| `SCYLLA_MEMORY`       | `${LIMIT_MEM_SCYLLA}`                 | Override the memory budget independently of the cgroup limit. Rarely needed.                |
 
 ## ScyllaDB sizing — how `--smp` and `--memory` work
 
 ScyllaDB is a sharded database: each shard is pinned to a single CPU and
-gets a slice of the total memory budget. The compose file passes two flags
-that determine the layout:
+gets a slice of the total memory budget. The compose file controls the
+layout via:
 
 * `--smp ${SCYLLA_SMP:-${LIMIT_CPUS_SCYLLA:-4}}` — the number of internal
   shards. Default 4, matching the CPU cgroup quota.
-* `--memory ${SCYLLA_MEMORY:-${LIMIT_MEM_SCYLLA:-30G}}` — the total memory
-  budget. Default 30 GiB, matching the memory cgroup limit.
+* `LIMIT_MEM_SCYLLA` — the cgroup memory limit on the container.
+  Default 30 GiB. ScyllaDB reads this directly and reserves its own
+  headroom for OS buffers, the network stack, and non-shard overhead
+  (verified empirically: at a 1 GiB cgroup limit ScyllaDB allocates
+  ~50% to itself in dev mode, ~7-10% in production mode with
+  `--overprovisioned 1`). **Do not pass `--memory` explicitly** —
+  doing so disables Scylla's automatic headroom and causes the
+  container to crash with `not enough memory` or get OOM-killed.
 
 Per-shard memory must be **≥ 1 GiB** or ScyllaDB refuses to start with
 `Only N MiB per shard; this is below the recommended minimum of 1 GiB/shard;
-terminating.` Use this rule of thumb to size:
+terminating.` After Scylla's auto-reserve, the rule of thumb is:
 
 ```
-LIMIT_MEM_SCYLLA / LIMIT_CPUS_SCYLLA  ≥  ~1.2 GiB
+(LIMIT_MEM_SCYLLA - ~2 GiB) / SCYLLA_SMP  ≥  ~1.2 GiB
 ```
 
-(The `1.2` accounts for the ~12% ScyllaDB reserves for metadata.)
+Examples that work with the default `LIMIT_MEM_SCYLLA=30G`:
 
-Examples that work with the 30 GiB default:
-
-| `LIMIT_CPUS_SCYLLA` | Per-shard raw | Per-shard usable | OK?                  |
-|---------------------|---------------|------------------|----------------------|
-| 4                   | 7.5 GiB       | ~6.5 GiB         | ✅ default — plenty   |
-| 8                   | 3.75 GiB      | ~3.3 GiB         | ✅                    |
-| 16                  | 1.875 GiB     | ~1.6 GiB         | ✅                    |
-| 24                  | 1.25 GiB      | ~1.1 GiB         | ✅ tight              |
-| 32                  | 0.94 GiB      | ~0.84 GiB        | ❌ fails to start     |
+| `SCYLLA_SMP` | Per-shard usable | OK?                   |
+|--------------|------------------|-----------------------|
+| 4            | ~6 GiB           | ✅ default — plenty    |
+| 8            | ~3 GiB           | ✅                     |
+| 16           | ~1.5 GiB         | ✅                     |
+| 22           | ~1.1 GiB         | ✅ tight               |
+| 24           | ~1.0 GiB         | ❌ at the edge         |
+| 32           | ~0.75 GiB        | ❌ fails to start      |
 
 If you want ScyllaDB to use more cores, raise `LIMIT_MEM_SCYLLA`
-proportionally. For example, to run 16 ScyllaDB shards comfortably:
+proportionally — that's the only knob you need to touch. Example, to
+run 16 ScyllaDB shards comfortably:
 
 ```
 LIMIT_CPUS_SCYLLA=16

@@ -78,22 +78,25 @@ for the full list.
 
 ScyllaDB is sharded: one shard per CPU core it sees, each shard pinned
 to a specific core with its own slice of memory. The compose file pins
-ScyllaDB to `LIMIT_CPUS_SCYLLA` cores via `--smp`, and to
-`LIMIT_MEM_SCYLLA` memory via `--memory`.
+ScyllaDB to `LIMIT_CPUS_SCYLLA` cores via `--smp`. Memory is bounded by
+the cgroup limit `LIMIT_MEM_SCYLLA` — ScyllaDB reads it directly and
+reserves its own headroom for OS buffers and non-shard overhead, so
+**you do not pass `--memory` explicitly**.
 
-ScyllaDB refuses to start if per-shard memory drops below 1 GiB. This
-matters when you scale up:
+ScyllaDB refuses to start if per-shard memory drops below 1 GiB. After
+Scylla's automatic reserve (~2 GiB on a 30 GiB cgroup with
+`--overprovisioned 1`), the rule of thumb to size is:
 
 ```
-LIMIT_MEM_SCYLLA / LIMIT_CPUS_SCYLLA  ≥  ~1.2 GiB
+(LIMIT_MEM_SCYLLA - ~2 GiB) / LIMIT_CPUS_SCYLLA  ≥  ~1.2 GiB
 ```
 
-The 1.2 multiplier accounts for the ~12% ScyllaDB reserves for
-metadata. Default `4 cores / 30 GiB` gives 7.5 GiB raw per shard — far
-above the floor.
+Default `4 cores / 30 GiB` leaves ~7 GiB usable per shard — far above
+the floor.
 
 If you raise `LIMIT_CPUS_SCYLLA` to use more cores, raise
-`LIMIT_MEM_SCYLLA` proportionally. See
+`LIMIT_MEM_SCYLLA` proportionally — that's the only knob you need to
+touch. See
 [ScyllaDB sizing](DOCKER-COMPOSE.md#scylladb-sizing--how---smp-and---memory-work)
 for the full table and a worked example.
 
