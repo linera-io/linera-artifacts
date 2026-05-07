@@ -123,6 +123,5 @@ for the full value reference.
 ## Where next
 
 - [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — what gets deployed and why
-- [`docs/MIGRATION-FROM-TESTNET-CONWAY-DOCKER.md`](MIGRATION-FROM-TESTNET-CONWAY-DOCKER.md) —
-  if you're moving from the old compose in the protocol repo
+- [`docs/POST-SETUP.md`](POST-SETUP.md) — day-2 operations: logs, restarts, backup, env upgrades
 - [`docs/examples/`](examples/README.md) — values files for common K8s scenarios
