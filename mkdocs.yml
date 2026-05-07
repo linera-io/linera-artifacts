@@ -61,6 +61,7 @@ plugins:
 nav:
   - Home: index.md
   - Quickstart: QUICKSTART.md
+  - Hardware requirements: HARDWARE.md
   - Guides:
       - Architecture: ARCHITECTURE.md
       - Helm: HELM.md
