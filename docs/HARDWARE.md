@@ -109,12 +109,6 @@ Filesystem on the data directory: ext4 or XFS. XFS is mildly
 preferred by ScyllaDB for very large datasets but ext4 is fine for
 testnet workloads.
 
-## Hardware that has been tested
-
-- **OVH bare metal** (Advance-1 generation): 16-core AMD EPYC, 64 GB DDR4,
-  2 × 960 GB NVMe in software RAID. Runs the recommended tier
-  comfortably. This is the reference config used by the Linera team.
-
 If you have a setup that works well (or doesn't), let us know on
 Discord or open an issue on
 [linera-io/linera-artifacts](https://github.com/linera-io/linera-artifacts/issues).
