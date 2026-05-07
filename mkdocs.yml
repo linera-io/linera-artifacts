@@ -66,9 +66,9 @@ nav:
       - Architecture: ARCHITECTURE.md
       - Helm: HELM.md
       - Docker Compose: DOCKER-COMPOSE.md
+      - Post-setup operations: POST-SETUP.md
       - Observability: OBSERVABILITY.md
       - Dev loop: DEV-LOOP.md
-      - Migrate from protocol repo: MIGRATION-FROM-TESTNET-CONWAY-DOCKER.md
   - Examples: examples/README.md
   - Chart READMEs:
       - linera-validator: https://github.com/linera-io/linera-artifacts/tree/main/helm/linera-validator
