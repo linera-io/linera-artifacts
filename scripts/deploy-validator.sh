@@ -156,9 +156,10 @@ EOF
 }
 
 extract_public_key_from_server_json() {
-    # Best-effort pubkey extraction from a server.json. The file's
-    # JSON shape varies across linera releases — try the few keys
-    # we've seen, fall back to "see file" otherwise. Stdout = key,
+    # Best-effort pubkey extraction from a server.json. Mirrors the
+    # stdout format of `linera-server generate`, which emits
+    # "<validator.public_key>,<validator.account_key>". Falls back to
+    # older/alternate shapes if either field is missing. Stdout = key,
     # never errors so the caller can keep going.
     local f="$1"
     if ! command -v jq >/dev/null 2>&1; then
@@ -166,11 +167,15 @@ extract_public_key_from_server_json() {
         return 0
     fi
     jq -r '
-        .validator.public_key
-        // .validator.name
-        // .public_key
-        // .name
-        // empty
+        if (.validator.public_key and .validator.account_key) then
+            "\(.validator.public_key),\(.validator.account_key)"
+        else
+            (.validator.public_key
+             // .validator.name
+             // .public_key
+             // .name
+             // empty)
+        end
     ' "$f" 2>/dev/null || true
 }
 
