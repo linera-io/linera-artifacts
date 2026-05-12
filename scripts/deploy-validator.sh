@@ -156,19 +156,38 @@ EOF
 }
 
 extract_public_key_from_server_json() {
-    # Best-effort pubkey extraction from a server.json. Mirrors the
-    # stdout format of `linera-server generate`, which emits
-    # "<validator.public_key>,<validator.account_key>". Falls back to
-    # older/alternate shapes if either field is missing. Stdout = key,
-    # never errors so the caller can keep going.
+    # Reconstruct the canonical "<validator_pk>,<account_key>" string
+    # that `linera-server generate` prints to stdout, from a stored
+    # server.json. The two halves have different on-disk shapes:
+    #
+    #   validator.public_key  - Secp256k1PublicKey with a custom human-
+    #                           readable Serialize that already emits hex
+    #                           of the compressed key (33 bytes -> 66 hex
+    #                           chars). Same string as Display => use as-is.
+    #   validator.account_key - AccountPublicKey enum with the default
+    #                           tagged serde repr ({"Ed25519":"<hex>"},
+    #                           {"Secp256k1":"<hex>"}, {"EvmSecp256k1":...}).
+    #                           Display / FromStr use hex(bcs::to_bytes),
+    #                           i.e. <BCS discriminant byte><inner hex>.
+    #                           Variant order in linera-base/src/crypto/mod.rs:
+    #                             0 -> Ed25519, 1 -> Secp256k1, 2 -> EvmSecp256k1.
+    #
+    # Stdout = key, never errors so the caller can keep going.
     local f="$1"
     if ! command -v jq >/dev/null 2>&1; then
         echo "(jq not installed — see ${f})"
         return 0
     fi
     jq -r '
-        if (.validator.public_key and .validator.account_key) then
-            "\(.validator.public_key),\(.validator.account_key)"
+        def account_key_display:
+          if type == "string"  then .
+          elif .Ed25519        then "00" + .Ed25519
+          elif .Secp256k1      then "01" + .Secp256k1
+          elif .EvmSecp256k1   then "02" + .EvmSecp256k1
+          else null end;
+        if (.validator.public_key and .validator.account_key
+            and (.validator.account_key | account_key_display)) then
+            "\(.validator.public_key),\(.validator.account_key | account_key_display)"
         else
             (.validator.public_key
              // .validator.name
