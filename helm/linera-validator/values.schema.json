@@ -81,6 +81,38 @@
                                     "type": "integer"
                                 }
                             }
+                        },
+                        "timeout": {
+                            "type": "object",
+                            "description": "Passed through 1:1 to BackendTrafficPolicy spec.timeout (tcp/http duration knobs). Structure validated by the Envoy Gateway CRD at apply time.",
+                            "properties": {
+                                "tcp": {
+                                    "type": "object"
+                                },
+                                "http": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "envoyClientTrafficPolicy": {
+                    "type": "object",
+                    "description": "Envoy Gateway ClientTrafficPolicy targeting the validator Gateway (downstream client side). Opt-in. timeout passed through 1:1 to spec.timeout; validated by the Envoy Gateway CRD at apply time.",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "timeout": {
+                            "type": "object",
+                            "properties": {
+                                "tcp": {
+                                    "type": "object"
+                                },
+                                "http": {
+                                    "type": "object"
+                                }
+                            }
                         }
                     }
                 },
