@@ -152,6 +152,10 @@ shards:
     eventCacheSize: 20000
     blockCacheSize: 20000
     executionStateCacheSize: 20000
+    # Chain-worker keep-alive TTL (ms): how long an idle loaded chain
+    # worker is kept resident before being dropped. Matches the
+    # testnet-conway GKE validators.
+    chainWorkerTtlMs: 300000
     # -- Free-form extra arguments appended verbatim to the linera-server
     # command line. Each entry is added on its own line.
     extraArgs: []
