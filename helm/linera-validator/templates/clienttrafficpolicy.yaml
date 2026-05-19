@@ -1,0 +1,18 @@
+{{- if and .Values.gateway.enabled .Values.gateway.envoyClientTrafficPolicy.enabled -}}
+{{- $ctp := .Values.gateway.envoyClientTrafficPolicy -}}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ include "linera-validator.fullname" . }}
+  labels:
+    {{- include "linera-validator.labels" . | nindent 4 }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ include "linera-validator.fullname" . }}
+  {{- with $ctp.timeout }}
+  timeout:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

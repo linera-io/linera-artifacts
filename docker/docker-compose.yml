@@ -261,6 +261,8 @@ services:
       - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
       - --block-cache-size
       - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
       - .:/config
     labels:
@@ -300,6 +302,8 @@ services:
       - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
       - --block-cache-size
       - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
       - .:/config
     labels:
@@ -339,6 +343,8 @@ services:
       - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
       - --block-cache-size
       - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
       - .:/config
     labels:
@@ -378,6 +384,8 @@ services:
       - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
       - --block-cache-size
       - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
       - .:/config
     labels:

@@ -152,6 +152,10 @@ shards:
     eventCacheSize: 20000
     blockCacheSize: 20000
     executionStateCacheSize: 20000
+    # Chain-worker keep-alive TTL (ms): how long an idle loaded chain
+    # worker is kept resident before being dropped. Matches the
+    # testnet-conway GKE validators.
+    chainWorkerTtlMs: 300000
     # -- Free-form extra arguments appended verbatim to the linera-server
     # command line. Each entry is added on its own line.
     extraArgs: []
@@ -509,6 +513,29 @@ gateway:
       # the expected number of streams concurrently transferring large
       # payloads. 64 MiB is comfortable.
       initialConnectionWindowSize: 67108864
+    # Passed through 1:1 to BackendTrafficPolicy spec.timeout (Envoy
+    # Gateway validates it; tcp.connectTimeout, http.requestTimeout,
+    # http.connectionIdleTimeout, http.maxConnectionDuration).
+    # Durations are Go-style: no "d" (7d = "168h"); "0s" disables.
+    # requestTimeout caps total request/stream duration; 1 week is a
+    # generous bound for dead streams without cutting healthy
+    # long-lived gRPC. Stream-idle is separate — see
+    # envoyClientTrafficPolicy.
+    timeout:
+      http:
+        requestTimeout: "168h"
+
+  # -- Opt-in ClientTrafficPolicy on the validator Gateway (downstream
+  # client↔Envoy side); the only place to set Envoy's HTTP stream-idle
+  # timeout (~5min default). enabled:false renders nothing; enabling
+  # affects the whole Gateway. timeout passed through 1:1 to
+  # spec.timeout (Envoy Gateway validates it); same Go-style durations.
+  envoyClientTrafficPolicy:
+    enabled: false
+    timeout:
+      http:
+        # Above Envoy's ~5min stream-idle default; applies when enabled.
+        idleTimeout: "168h"
 
 # =============================================================================
 # RBAC and ServiceAccount

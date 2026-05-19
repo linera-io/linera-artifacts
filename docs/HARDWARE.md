@@ -107,6 +107,13 @@ for the full table and a worked example.
 - `wget`, `jq`, `python3` (used by `deploy-validator.sh`)
 - AIO max events ≥ 1,048,576 (`fs.aio-max-nr`) — the `scylla-setup`
   container handles this for you
+- Netfilter conntrack max ≥ 1,048,576 (`net.netfilter.nf_conntrack_max`)
+  — heavily suggested. A validator opens many short-lived gRPC/DNS
+  connections; a low limit fills the conntrack table and the kernel
+  drops packets (including DNS), surfacing as cross-chain failures.
+  Set it persistently:
+  `echo 'net.netfilter.nf_conntrack_max=1048576' | sudo tee /etc/sysctl.d/99-linera.conf && sudo sysctl --system`
+  (`deploy-validator.sh` warns if it is too low.)
 
 Filesystem on the data directory: ext4 or XFS. XFS is mildly
 preferred by ScyllaDB for very large datasets but ext4 is fine for

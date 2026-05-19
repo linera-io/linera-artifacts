@@ -27,7 +27,7 @@
             versions 2
 
             dial_timeout 10s
-            response_header_timeout 10s
+            # No response/read timeout: gRPC streams here are long-lived.
 
             # Skip TLS verification for self-signed certificates
             tls_insecure_skip_verify

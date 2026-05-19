@@ -94,6 +94,21 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
+# A validator opens many short-lived gRPC/DNS connections. A low
+# netfilter conntrack limit fills up and the kernel silently drops
+# packets (including DNS), surfacing as cross-chain failures. Heavily
+# suggested host setting; non-fatal warning only.
+check_conntrack() {
+    local cur min=1048576
+    cur="$(sysctl -n net.netfilter.nf_conntrack_max 2>/dev/null \
+        || cat /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null || echo 0)"
+    if [[ "$cur" =~ ^[0-9]+$ ]] && (( cur < min )); then
+        log WARNING "net.netfilter.nf_conntrack_max is ${cur} (recommended >= ${min})."
+        log WARNING "Heavily suggested before running a validator:"
+        log WARNING "  echo 'net.netfilter.nf_conntrack_max=${min}' | sudo tee /etc/sysctl.d/99-linera.conf && sudo sysctl --system"
+    fi
+}
+
 download_genesis() {
     local url="$1" target="$2" force="$3"
     if [[ -f "$target" && "$force" != "1" ]]; then
@@ -330,6 +345,7 @@ main() {
 
     require_cmd docker
     docker compose version >/dev/null 2>&1 || die "Missing required command: docker compose"
+    check_conntrack
 
     [[ $skip_genesis -eq 1 && $force_genesis -eq 1 ]] && \
         die "--skip-genesis and --force-genesis are mutually exclusive"
