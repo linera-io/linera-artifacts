@@ -33,6 +33,12 @@ spec:
         resources:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- with .Values.scylla.rack.agentResources }}
+        # requests==limits here + integer-cpu resources above => Guaranteed QoS
+        # for the whole pod, so the static CPU manager can pin Scylla's cores.
+        agentResources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- if or .Values.scylla.rack.placement.nodeAffinity .Values.scylla.rack.placement.tolerations }}
         placement:
           {{- with .Values.scylla.rack.placement.nodeAffinity }}

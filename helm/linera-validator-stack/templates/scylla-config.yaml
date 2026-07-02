@@ -11,4 +11,10 @@ data:
     {{- range $key, $value := .Values.scylla.config.data }}
     {{ $key }}: {{ $value }}
     {{- end }}
+    {{- with .Values.scylla.config.commitlogSync }}
+    commitlog_sync: {{ . }}
+    {{- end }}
+    {{- if eq (.Values.scylla.config.commitlogSync | toString) "batch" }}
+    commitlog_sync_batch_window_in_ms: {{ .Values.scylla.config.commitlogSyncBatchWindowMs | int }}
+    {{- end }}
 {{- end -}}
