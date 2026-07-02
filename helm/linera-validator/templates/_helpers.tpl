@@ -82,11 +82,16 @@ ServiceAccount name to use.
 {{- end }}
 
 {{/*
-Image reference (repo:tag).
+Image reference. `image.digest` (sha256:...) pins content-addressed and takes
+precedence over `image.tag` — a digest reference can never move, unlike tags.
 */}}
 {{- define "linera-validator.image" -}}
+{{- if .Values.image.digest -}}
+{{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
+{{- else -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
+{{- end -}}
 {{- end }}
 
 {{/*

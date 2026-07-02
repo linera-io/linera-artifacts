@@ -1,6 +1,6 @@
 # linera-validator
 
-![Version: 0.1.4](https://img.shields.io/badge/Version-0.1.4-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.1.5](https://img.shields.io/badge/Version-0.1.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Linera validator core: the shards (StatefulSet) and proxies (StatefulSet)
 that together form a single validator on the Linera network.
@@ -88,6 +88,7 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | gateway.envoyClientTrafficPolicy | object | `{"enabled":false,"timeout":{"http":{"idleTimeout":"168h"}}}` | Opt-in ClientTrafficPolicy on the validator Gateway (downstream client↔Envoy side); the only place to set Envoy's HTTP stream-idle timeout (~5min default). enabled:false renders nothing; enabling affects the whole Gateway. timeout passed through 1:1 to spec.timeout (Envoy Gateway validates it); same Go-style durations. |
 | gateway.hostname | string | `""` | Hostname for the validator. external-dns can manage the corresponding DNS record from this annotation. |
 | gateway.tlsSecretName | string | `""` | TLS Secret produced by cert-manager (or any other source). |
+| image.digest | string | `""` | Image digest (e.g. "sha256:..."). Takes precedence over tag when set — use for immutable, content-addressed pins. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | image.pullSecrets | list | `[]` | Pull secrets for private registries. |
 | image.repository | string | `""` | Image repository for the linera binaries (REQUIRED). |

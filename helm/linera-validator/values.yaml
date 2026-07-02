@@ -30,6 +30,9 @@ image:
   repository: ""
   # -- Image tag. Defaults to .Chart.appVersion if empty.
   tag: ""
+  # -- Image digest (e.g. "sha256:..."). Takes precedence over tag when set —
+  # use for immutable, content-addressed pins.
+  digest: ""
   # -- Image pull policy.
   pullPolicy: IfNotPresent
   # -- Pull secrets for private registries.
