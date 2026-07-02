@@ -118,12 +118,55 @@ Key variables:
 | `STORAGE_REPLICATION_FACTOR` | `1`                            | Matches single-node Scylla. Do not change without a Scylla cluster.                         |
 | `PROXY_PORT`          | `19100`                               | Host port the proxy is bound to (behind Caddy on 443).                                     |
 | `LIMIT_CPUS_SHARD_N` / `LIMIT_MEM_SHARD_N` | per-shard                | Resource limits (honored in swarm or with `docker compose --compatibility`).               |
-| `LINERA_EXECUTION_STATE_CACHE_SIZE` | `5000`                  | Upstream default is 10000 — lower to save RAM.                                             |
-| `LINERA_BLOCK_CACHE_SIZE` | `2500`                            | Upstream default is 5000 — lower to save RAM.                                              |
+| `LINERA_EXECUTION_STATE_CACHE_SIZE` | `20000`                 | Matches the GKE validators. Lower on a small/low-RAM box to save RAM. Shard-only.          |
+| `LINERA_BLOCK_CACHE_SIZE` | `20000`                           | Matches the GKE validators. Lower on a small/low-RAM box to save RAM. Shard-only.          |
 | `WATCHTOWER_INTERVAL` | `30`                                  | Seconds between image-update checks.                                                       |
 | `LIMIT_CPUS_SCYLLA`   | `4`                                   | CPU cgroup budget for ScyllaDB. Also drives `--smp` (shard count). See **ScyllaDB sizing** below. |
 | `LIMIT_MEM_SCYLLA`    | `30G`                                 | Memory cgroup budget for the ScyllaDB container. ScyllaDB reads this and reserves its own headroom — see below. |
 | `SCYLLA_SMP`          | `${LIMIT_CPUS_SCYLLA}`                | Override the shard count independently of the CPU limit. Rarely needed.                    |
+
+## Cache tuning — matching GKE on a big enough box
+
+The shards and proxy carry storage (LRU) and in-memory caches. The
+single-host stack ships them **defaulted to the same values as the
+testnet-conway GKE validators** (`helm/linera-validator/values.yaml`,
+`shards.cli` / `proxies.cli`), so on a sufficiently large box you can
+leave them untouched and get GKE-class cache behavior. On a small or
+low-RAM box, lower them in `.env`.
+
+All of these are applied to **both** shards and the proxy:
+
+| Variable                                    | Default       | Unit     |
+|---------------------------------------------|---------------|----------|
+| `LINERA_STORAGE_MAX_CACHE_SIZE`             | `1000000000`  | bytes    |
+| `LINERA_STORAGE_MAX_CACHE_ENTRIES`          | `500000`      | entries  |
+| `LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE`       | `1000000`     | bytes    |
+| `LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE`   | `1000000`     | bytes    |
+| `LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE` | `1000000` | bytes    |
+| `LINERA_STORAGE_MAX_CACHE_VALUE_SIZE`       | `500000000`   | bytes    |
+| `LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE`   | `200000000`   | bytes    |
+| `LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE` | `10000000` | bytes   |
+| `LINERA_BLOB_CACHE_SIZE`                    | `1000`        | entries  |
+| `LINERA_CONFIRMED_BLOCK_CACHE_SIZE`         | `10000`       | entries  |
+| `LINERA_CERTIFICATE_CACHE_SIZE`             | `5000`        | entries  |
+| `LINERA_CERTIFICATE_RAW_CACHE_SIZE`         | `50000`       | entries  |
+| `LINERA_EVENT_CACHE_SIZE`                   | `20000`       | entries  |
+
+Shard-only (the proxy does not execute blocks, so these are not passed
+to it):
+
+| Variable                            | Default  | Unit     |
+|-------------------------------------|----------|----------|
+| `LINERA_EXECUTION_STATE_CACHE_SIZE` | `20000`  | entries  |
+| `LINERA_BLOCK_CACHE_SIZE`           | `20000`  | entries  |
+| `LINERA_CHAIN_WORKER_TTL_MS`        | `300000` | ms       |
+
+Previous releases shipped `LINERA_BLOCK_CACHE_SIZE` and
+`LINERA_EXECUTION_STATE_CACHE_SIZE` detuned (2500 / 5000) to fit a
+low-RAM host, and gave the proxy **no** storage-cache flags at all. Both
+are now at GKE parity by default. `upgrade-env.sh` appends the new
+variables commented-out, so existing deployments keep their current
+behavior until you opt in.
 
 ## ScyllaDB sizing — how `--smp` and `--memory` work
 
@@ -175,6 +218,56 @@ LIMIT_MEM_SCYLLA=24G
     don't support shrinking the shard count. If you need to reduce
     `LIMIT_CPUS_SCYLLA` after running the validator, wipe the
     `${SCYLLA_DATA_DIR:-./data/scylla}` volume and re-sync from genesis.
+
+## Dedicated-hardware ScyllaDB tuning
+
+By default the stack assumes ScyllaDB **shares** the host with the
+shards, the proxy, and Caddy: it runs with `--overprovisioned 1` and no
+CPU pinning. On a box where you can give ScyllaDB its own cores, two
+opt-in knobs move it toward GKE-class isolation:
+
+| Variable                | Default | Effect                                                                 |
+|-------------------------|---------|------------------------------------------------------------------------|
+| `SCYLLA_CPUSET`         | *(unset)* | Pins the ScyllaDB container to specific physical cores (Docker `cpuset`). E.g. `0-7`. |
+| `SCYLLA_OVERPROVISIONED`| `1`     | Set to `0` on a dedicated box so ScyllaDB stops yielding CPU it assumes others need. |
+
+On a 16-core host, for example, pin ScyllaDB to half the cores and leave
+the rest for the shards and proxy:
+
+```bash
+SCYLLA_CPUSET=0-7
+SCYLLA_OVERPROVISIONED=0
+LIMIT_CPUS_SCYLLA=8
+LIMIT_MEM_SCYLLA=24G
+```
+
+Reserve a **disjoint** core range for the rest of the stack
+(`LIMIT_CPUS_SHARD_N`, `LIMIT_CPUS_PROXY`) so the pinning actually buys
+isolation rather than oversubscribing the pinned cores.
+
+### Commitlog durability
+
+The single-node ScyllaDB runs with **batch** commitlog sync by default,
+mirroring the GKE validators (`scyllaCommitlogSync: batch`,
+`scyllaCommitlogSyncBatchWindowMs: 2`): writes are fsynced to disk
+before being acknowledged, at the cost of a small (2 ms) batching
+latency. Override via `SCYLLA_COMMITLOG_SYNC` /
+`SCYLLA_COMMITLOG_SYNC_BATCH_WINDOW_MS` (set `SCYLLA_COMMITLOG_SYNC=periodic`
+to trade durability for throughput).
+
+### How far can a single host go?
+
+With the cache defaults at GKE parity, ScyllaDB pinned to dedicated
+cores, `--overprovisioned 0`, batch commitlog, and ScyllaDB data on a
+fast (ideally XFS, see below) disk, the single-host stack scales
+**vertically** toward GKE-class throughput on a big enough machine. What
+it **cannot** match is GKE's physical isolation: there, ScyllaDB gets
+its own dedicated nodes with perftune CPU pinning, IRQ steering off the
+Scylla cores, and a separate kernel/NIC, while here it shares the kernel,
+disks, and NICs with the shards and proxy. `SCYLLA_CPUSET` approximates
+the CPU half of that; the rest is a hard limit of single-host
+co-tenancy. For full isolation and HA, use the Helm path with a real
+ScyllaDB cluster.
 
 ## Upgrading .env safely
 
@@ -233,5 +326,10 @@ loop also picks up config changes on restart.
 - Single-validator, single-host. No HA, no replication across machines.
 - ScyllaDB runs as a single node (RF=1). Safe for dev and single-validator
   production; you need a real Scylla cluster for higher availability.
+- Vertical scaling only: with GKE-parity caches and dedicated-core ScyllaDB
+  pinning (see **Dedicated-hardware ScyllaDB tuning**) the stack scales up
+  toward GKE-class throughput, but cannot match GKE's dedicated-node Scylla
+  isolation (separate kernel/NICs, perftune, IRQ steering) — ScyllaDB here
+  always shares the host with the shards and proxy.
 - `docker compose down -v` wipes ScyllaDB — you'll have to re-sync from
   genesis on the next start.
