@@ -74,7 +74,7 @@ helm install validator-1 \
 | Repository | Name | Version |
 |------------|------|---------|
 | file://../linera-block-exporter | linera-block-exporter | 0.1.3 |
-| file://../linera-validator | linera-validator | 0.1.3 |
+| file://../linera-validator | linera-validator | 0.1.4 |
 
 ## Values
 

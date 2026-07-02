@@ -369,9 +369,10 @@ serviceMonitor:
 
 prometheusRule:
   # -- Create a PrometheusRule with the default Linera alerts
-  # (validator down, shard restart, proxy high latency). Extend with
-  # extraRules below. OPT-IN: requires prometheus-operator + the
-  # PrometheusRule CRD installed in the cluster.
+  # (validator down, shard restart, proxy gRPC latency). Enable
+  # additional groups via `alerts.*` and extend with `extraRules`
+  # below. OPT-IN: requires prometheus-operator + the PrometheusRule
+  # CRD installed in the cluster.
   enabled: false
   # -- Extra labels on the PrometheusRule (match your Prometheus's
   # ruleSelector if it filters by label).
@@ -386,11 +387,44 @@ prometheusRule:
   #   annotations:
   #     summary: …
 
-  # -- Pre-computed recording rules (`linera:*:rate1m` aggregates over
-  # execution, request, storage, view metrics). Useful when a local
-  # monitoring stack answers Grafana queries and you want faster
-  # long-window panels. Leave OFF when metrics are forwarded to a
-  # central backend that already does its own recording.
+  # -- Optional extra alert groups, layered on top of the always-on
+  # core alerts (validator down, shard restart, proxy gRPC latency).
+  # Each toggle gates one group and is OFF by default: enable only the
+  # ones whose metrics your Prometheus actually scrapes, so you don't
+  # ship rules that can never fire (or fire on absent data). All of
+  # these require `prometheusRule.enabled: true`.
+  alerts:
+    # -- Validator request latency (linera_proxy/server_request_latency
+    # p99 > 1s). Always available — these come from the validator's own
+    # metrics endpoint that this chart already exposes.
+    validatorLatency: false
+    # -- Chain correctness (InboxGapDetected / CorruptedChainState).
+    # Critical, validator-internal, cannot self-heal. Recommended.
+    chainCorrectness: false
+    # -- Block production stalled (linera_num_blocks flat for 15m while
+    # the shard is up).
+    blockProduction: false
+    # -- ScyllaDB storage backend (read/write p99 latency, I/O delay,
+    # target down, process restart). Requires your Prometheus to scrape
+    # native `scylla_*` metrics from your Scylla cluster.
+    scylla: false
+    # -- Scylla Manager backups (overdue / failed). Only meaningful if
+    # you run Scylla Manager against your cluster.
+    scyllaBackup: false
+    # -- PVC capacity (critical / warning / filling-up). Requires
+    # kube-state-metrics + kubelet volume stats in your Prometheus.
+    storage: false
+
+  # -- Pre-computed recording rules. Two PrometheusRules are emitted:
+  # the linera `linera:*:rate1m` aggregates (execution, request,
+  # storage, view metrics) AND the ScyllaDB rules (coordinator
+  # latency percentiles, CQL rates, per-table latencies, Scylla
+  # Manager progress) used by the standard Scylla dashboards. Useful
+  # when a local monitoring stack answers Grafana queries and you want
+  # faster long-window panels. The Scylla rules reference native
+  # `scylla_*` metrics; rules whose inputs are absent simply produce
+  # nothing. Leave OFF when metrics are forwarded to a central backend
+  # that already does its own recording.
   recordingRules:
     enabled: false
 
