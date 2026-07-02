@@ -101,6 +101,13 @@ services:
     container_name: scylla
     restart: unless-stopped
     logging: *default-logging
+    # Optional CPU pinning for dedicated hardware. Empty (default) = no
+    # pinning, matching the shared-host case. Set SCYLLA_CPUSET (e.g. "0-7")
+    # in .env to confine ScyllaDB to its own physical cores so it never
+    # contends with the shards/proxy — the docker mirror of the GKE
+    # validators' dedicated-node perftune CPU pinning. Pair it with
+    # SCYLLA_OVERPROVISIONED=0.
+    cpuset: "${SCYLLA_CPUSET:-}"
     volumes:
       - ${SCYLLA_DATA_DIR:-./data/scylla}:/var/lib/scylla
     environment:
@@ -110,6 +117,15 @@ services:
       - "${SCYLLA_DEVELOPER_MODE:-0}"
       - "--overprovisioned"
       - "${SCYLLA_OVERPROVISIONED:-1}"
+      # Durability: batch commitlog sync, mirroring the testnet-conway GKE
+      # validators (argo/app-values/validator/base-values.yaml:
+      # scyllaCommitlogSync=batch, window=2ms). Scylla accepts config keys as
+      # CLI flags (underscores -> dashes); these are appended verbatim to the
+      # scylla binary via the image's SCYLLA_DOCKER_ARGS passthrough.
+      - "--commitlog-sync"
+      - "${SCYLLA_COMMITLOG_SYNC:-batch}"
+      - "--commitlog-sync-batch-window-in-ms"
+      - "${SCYLLA_COMMITLOG_SYNC_BATCH_WINDOW_MS:-2}"
       # Bind ScyllaDB shard count to the CPU budget from the cgroup limits
       # below. Without --smp, ScyllaDB auto-detects shards from the
       # container's visible nproc (= host nproc) and divides memory across
@@ -206,6 +222,36 @@ services:
       - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
       - --storage-replication-factor
       - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's proxies.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's proxies.cli. The proxy
+      # does not execute blocks, so block/execution-state/chain-worker flags
+      # are shard-only and intentionally omitted here.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
       - /config/server.json
     volumes:
       - .:/config
@@ -257,10 +303,38 @@ services:
       - "0"
       - --storage-replication-factor
       - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
       - --execution-state-cache-size
-      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
       - --block-cache-size
-      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
       - --chain-worker-ttl-ms
       - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
@@ -298,10 +372,38 @@ services:
       - "1"
       - --storage-replication-factor
       - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
       - --execution-state-cache-size
-      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
       - --block-cache-size
-      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
       - --chain-worker-ttl-ms
       - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
@@ -339,10 +441,38 @@ services:
       - "2"
       - --storage-replication-factor
       - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
       - --execution-state-cache-size
-      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
       - --block-cache-size
-      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
       - --chain-worker-ttl-ms
       - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
@@ -380,10 +510,38 @@ services:
       - "3"
       - --storage-replication-factor
       - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
       - --execution-state-cache-size
-      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-5000}"
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
       - --block-cache-size
-      - "${LINERA_BLOCK_CACHE_SIZE:-2500}"
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
       - --chain-worker-ttl-ms
       - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
     volumes:
