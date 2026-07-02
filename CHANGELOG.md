@@ -45,9 +45,22 @@ the first tag.
   optionally `cert-manager`) for the Helm path.
 - `devspace.yaml` — CNCF DevSpace configuration for the local chart
   dev loop on kind.
-- CI workflows: yamllint, shellcheck, helm-lint, helm-unittest (69
-  tests across 16 suites), chart-testing, kubeconform, helm-docs
+- CI workflows: yamllint, shellcheck, helm-lint, helm-unittest (80
+  tests across 17 suites), chart-testing, kubeconform, helm-docs
   drift check, plus a cosign-signed OCI release on SemVer tags.
+- `linera-validator` observability, opt-in and off by default:
+  - ScyllaDB recording rules (`templates/scylla-recording-rules.yaml`,
+    122 `scylla:*`/`cql:*` aggregates: coordinator read/write/CAS
+    latency percentiles, CQL rates, error rates, per-table latencies,
+    Scylla Manager progress). Gated behind both `prometheusRule.enabled`
+    and `prometheusRule.recordingRules.enabled`, alongside the existing
+    linera recording rules.
+  - Extra alert groups gated by per-group `prometheusRule.alerts.*`
+    toggles: validator request latency, chain correctness
+    (`InboxGapDetected` / `CorruptedChainState`), block-production
+    stalled, ScyllaDB latency/down/restart, Scylla Manager backups,
+    and PVC capacity. Self-monitoring operators enable the ones whose
+    metrics they scrape.
 
 - Optional observability overlays for the compose stack (off by
   default; most validators run without):

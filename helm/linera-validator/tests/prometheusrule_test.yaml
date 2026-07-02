@@ -27,6 +27,85 @@ tests:
             alert: LineraValidatorDown
           any: true
 
+  - it: ships only the core alert group when no extra alerts are toggled
+    set:
+      prometheusRule.enabled: true
+    asserts:
+      - lengthEqual:
+          path: spec.groups
+          count: 1
+      - equal:
+          path: spec.groups[0].name
+          value: linera-validator
+
+  - it: adds the validator-latency group when toggled
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.alerts.validatorLatency: true
+    asserts:
+      - equal:
+          path: spec.groups[1].name
+          value: linera-validator.latency
+      - contains:
+          path: spec.groups[1].rules
+          content:
+            alert: LineraServerRequestLatencyHigh
+          any: true
+
+  - it: adds the chain-correctness group with a CorruptedChainState alert
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.alerts.chainCorrectness: true
+    asserts:
+      - contains:
+          path: spec.groups[?(@.name=="linera-validator.chain")].rules
+          content:
+            alert: LineraCorruptedChainState
+          any: true
+      # keep_firing_for is preserved from the GKE source rule.
+      - matchRegex:
+          path: spec.groups[*].rules[?(@.alert=="LineraCorruptedChainState")].keep_firing_for
+          pattern: 24h
+
+  - it: adds the scylla group with read/write latency and down alerts
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.alerts.scylla: true
+    asserts:
+      - contains:
+          path: spec.groups[?(@.name=="linera-validator.scylla")].rules
+          content:
+            alert: LineraScyllaReadLatencyHigh
+          any: true
+      - contains:
+          path: spec.groups[?(@.name=="linera-validator.scylla")].rules
+          content:
+            alert: LineraScyllaDown
+          any: true
+
+  - it: substitutes the release namespace into namespace-scoped alerts
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.alerts.storage: true
+    asserts:
+      - matchRegex:
+          path: spec.groups[?(@.name=="linera-validator.storage")].rules[?(@.alert=="LineraPVCSpaceCritical")].expr
+          pattern: namespace="linera"
+
+  - it: renders every alert group when all toggles are on
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.alerts.validatorLatency: true
+      prometheusRule.alerts.chainCorrectness: true
+      prometheusRule.alerts.blockProduction: true
+      prometheusRule.alerts.scylla: true
+      prometheusRule.alerts.scyllaBackup: true
+      prometheusRule.alerts.storage: true
+    asserts:
+      - lengthEqual:
+          path: spec.groups
+          count: 7
+
   - it: appends extraRules group when provided
     set:
       prometheusRule.enabled: true
@@ -38,10 +117,10 @@ tests:
             severity: warning
     asserts:
       - equal:
-          path: spec.groups[1].name
+          path: spec.groups[?(@.name=="linera-validator-extra")].name
           value: linera-validator-extra
       - contains:
-          path: spec.groups[1].rules
+          path: spec.groups[?(@.name=="linera-validator-extra")].rules
           content:
             alert: MyCustomAlert
           any: true
