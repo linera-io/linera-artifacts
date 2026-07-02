@@ -68,3 +68,38 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: ".Values.scylla.backups.location is required when backups.enabled is true"
+
+  - it: renders agentResources on the rack for Guaranteed QoS (default)
+    asserts:
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.requests.cpu
+          value: 200m
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.limits.cpu
+          value: 200m
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.requests.memory
+          value: 256Mi
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.limits.memory
+          value: 256Mi
+
+  - it: agentResources requests equal limits (Guaranteed QoS invariant)
+    asserts:
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.requests
+          value:
+            cpu: 200m
+            memory: 256Mi
+      - equal:
+          path: spec.datacenter.racks[0].agentResources.limits
+          value:
+            cpu: 200m
+            memory: 256Mi
+
+  - it: omits agentResources when explicitly cleared
+    set:
+      scylla.rack.agentResources: null
+    asserts:
+      - notExists:
+          path: spec.datacenter.racks[0].agentResources

@@ -1,0 +1,28 @@
+{{- if and .Values.scylla.enabled .Values.scylla.tuning.enabled -}}
+# Tuning-only NodeConfig: enables scylla-operator performance tuning
+# (perftune: CPU pinning via /etc/scylla.d/cpuset.conf, IRQ steering off
+# Scylla cores, kernel/net/disk-scheduler sysctls) on the selected nodes.
+#
+# Deliberately contains NO localDiskSetup: it formats/mounts nothing and never
+# touches the data volume.
+#
+# CPU pinning additionally requires the Scylla pod to be Guaranteed QoS (the
+# rack.agentResources requests==limits above) AND the kubelet on these nodes to
+# run with cpuManagerPolicy=static. See the HELM.md "ScyllaDB performance" note.
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: NodeConfig
+metadata:
+  name: {{ .Values.scylla.tuning.name | quote }}
+  labels:
+    {{- include "linera-validator-stack.labels" . | nindent 4 }}
+spec:
+  placement:
+    {{- with .Values.scylla.tuning.nodeSelector }}
+    nodeSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.scylla.tuning.tolerations }}
+    tolerations:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+{{- end -}}

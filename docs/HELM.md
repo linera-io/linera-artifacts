@@ -194,6 +194,87 @@ shards:
           app.kubernetes.io/component: shards
 ```
 
+### ScyllaDB performance (production)
+
+The `linera-validator-stack` umbrella provisions a `ScyllaCluster` from
+`scylla.*` values. The defaults boot on a small cluster, but ScyllaDB is
+latency-critical for a validator and needs deliberate tuning to match the
+production (GKE) validators.
+
+#### Fast SSD storage class — do not skip this
+
+`scylla.rack.storage.storageClassName` defaults to `""` (the cluster's
+**default** StorageClass). For ScyllaDB that is almost never what you want:
+the default class is frequently HDD- or network-backed and will not meet
+Scylla's I/O requirements, producing read-latency spikes that stall block
+production. **Set this explicitly to a fast SSD class.** Recommended per
+provider:
+
+| Provider | StorageClass | Notes |
+|----------|-------------|-------|
+| GKE, regional PD-SSD | `premium-rwo` | Good default. |
+| GKE, zonal local NVMe (fastest) | `local-ssd-resource-adapter` | Needs the Local SSD CSI driver enabled and a nodepool with `--local-ssd-count > 0`. |
+| EKS, gp3 SSD | `gp3` | |
+| AKS, Premium SSD v2 | `managed-premium` | |
+| OVH, managed control-plane SSD | `csi-cinder-high-speed` | |
+| Bare metal, local NVMe | `local-path` (Rancher) or a custom provisioner | |
+
+If you only have HDD-backed storage, you will not meet Scylla's I/O floor —
+run Scylla on a bare-metal host with a local NVMe instead.
+
+#### Durable commitlog (default)
+
+`scylla.config.commitlogSync` defaults to `batch` with
+`commitlogSyncBatchWindowMs: 2`, which fsyncs each write batch (matching the
+production validators) instead of flushing periodically (~10s, which loses
+recent writes on a crash). Override `commitlogSync: periodic` (or `""` to use
+Scylla's own default) only if you understand the durability trade-off. This
+takes effect on a Scylla pod restart.
+
+#### Core pinning + IRQ steering (the three-part requirement)
+
+For GKE-equivalent tail latency, Scylla must own its CPU cores and keep NIC
+interrupts off them. That requires **all three** of the following together —
+any one alone does nothing:
+
+1. **A dedicated Scylla nodepool.** Taint it and pin the rack to it via
+   `scylla.rack.placement.nodeAffinity` + `scylla.rack.placement.tolerations`
+   so no other workload shares those cores.
+2. **`cpuManagerPolicy=static` on that nodepool's kubelet.** This is a
+   nodepool/kubelet setting (e.g. set it in your GKE/EKS nodepool config or
+   kubelet flags), not a chart value. It lets the static CPU manager grant
+   Scylla's container exclusive integer cores — which in turn requires the pod
+   to be **Guaranteed QoS**. The chart already arranges Guaranteed QoS by
+   giving the agent sidecar `scylla.rack.agentResources` with
+   `requests==limits` (fractional, so the agent stays off Scylla's cores).
+3. **The tuning NodeConfig.** Set `scylla.tuning.enabled=true` to emit a
+   `scylla.scylladb.com/v1alpha1` `NodeConfig` that tells scylla-operator to
+   run `perftune` on the selected nodes: pin Scylla to its cores, steer NIC
+   IRQs off those cores, and apply kernel/net/disk-scheduler sysctls. Point
+   `scylla.tuning.nodeSelector` / `scylla.tuning.tolerations` at the same
+   dedicated nodepool. It is **disabled by default** because on a shared,
+   non-statically-pinned nodepool it provides no benefit.
+
+```yaml
+scylla:
+  rack:
+    storage:
+      storageClassName: premium-rwo
+    placement:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - { key: workload, operator: In, values: [scylla] }
+      tolerations:
+        - { key: scylla-db, operator: Equal, value: "true", effect: NoSchedule }
+  tuning:
+    enabled: true
+    nodeSelector: { workload: scylla }
+    tolerations:
+      - { key: scylla-db, operator: Equal, value: "true", effect: NoSchedule }
+```
+
 ### Observability
 
 The charts emit `ServiceMonitor` resources (when

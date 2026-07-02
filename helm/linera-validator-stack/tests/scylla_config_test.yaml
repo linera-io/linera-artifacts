@@ -40,3 +40,39 @@ tests:
       - matchRegex:
           path: data["scylla.yaml"]
           pattern: "cluster_name: linera-test"
+
+  - it: defaults to durable batch commitlog with a 2ms window
+    asserts:
+      - matchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync: batch"
+      - matchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync_batch_window_in_ms: 2"
+
+  - it: honours a custom batch window
+    set:
+      scylla.config.commitlogSyncBatchWindowMs: 5
+    asserts:
+      - matchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync_batch_window_in_ms: 5"
+
+  - it: periodic commitlog omits the batch window key
+    set:
+      scylla.config.commitlogSync: periodic
+    asserts:
+      - matchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync: periodic"
+      - notMatchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync_batch_window_in_ms"
+
+  - it: omits commitlog_sync entirely when commitlogSync is empty
+    set:
+      scylla.config.commitlogSync: ""
+    asserts:
+      - notMatchRegex:
+          path: data["scylla.yaml"]
+          pattern: "commitlog_sync"

@@ -109,6 +109,24 @@ scylla:
       limits:
         cpu: "7"
         memory: 51Gi
+    # -- Resources for the scylla-manager-agent sidecar. Set requests==limits
+    # (and put them on EVERY container in the pod, as the integer-cpu `resources`
+    # above already does) so the whole pod lands in the Guaranteed QoS class.
+    # Guaranteed QoS is what lets the kubelet static CPU manager hand Scylla's
+    # container its integer CPUs as EXCLUSIVE cores — which the optional
+    # `scylla.tuning` NodeConfig then pins and IRQ-steers around.
+    #
+    # Kept FRACTIONAL (200m) on purpose: the agent stays in the shared CPU pool
+    # instead of consuming one of Scylla's dedicated cores. 256Mi is a deliberate
+    # floor — the scylla-operator default of 10M memory would OOM the agent on
+    # its first backup upload once limits are enforced.
+    agentResources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
     placement:
       nodeAffinity: {}
       # requiredDuringSchedulingIgnoredDuringExecution:
@@ -130,10 +148,52 @@ scylla:
     data:
       query_tombstone_page_limit: 200000
       commitlog_segment_size_in_mb: 64
+    # -- Commitlog durability mode. "batch" fsyncs each write batch (durable,
+    # production default, promoted fleet-wide from the testnet-conway canary);
+    # "periodic" flushes on a timer (~10s, faster but loses recent writes on a
+    # crash). Set to "" to omit the key and use Scylla's own default.
+    commitlogSync: batch
+    # -- When commitlogSync is "batch", how long (ms) Scylla waits to coalesce
+    # other writes before fsync. Only rendered when commitlogSync == "batch".
+    commitlogSyncBatchWindowMs: 2
 
   # -- Sysctls applied at the node level by the ScyllaCluster spec.
   sysctls:
     - fs.aio-max-nr=4082080
+
+  # -- Optional perftune / IRQ-steering NodeConfig (scylla-operator
+  # performance tuning). When enabled, the chart emits a
+  # scylla.scylladb.com/v1alpha1 NodeConfig that tells the operator to run
+  # perftune on the selected nodes: pin Scylla to its exclusive cores
+  # (/etc/scylla.d/cpuset.conf), steer NIC IRQs OFF those cores, and apply
+  # kernel/net/disk-scheduler sysctls.
+  #
+  # GKE-equivalent performance needs ALL THREE of these together, not just
+  # this flag:
+  #   1. a DEDICATED Scylla nodepool (taint + matching rack nodeAffinity/
+  #      tolerations so nothing else lands on those cores);
+  #   2. kubelet `cpuManagerPolicy=static` on that nodepool (so the static CPU
+  #      manager can grant exclusive cores — also requires the Guaranteed-QoS
+  #      pod that `rack.agentResources` above produces);
+  #   3. this NodeConfig (the perftune/IRQ steering itself).
+  #
+  # Disabled by default: it only helps on a dedicated, statically-pinned
+  # nodepool and is a no-op (or worse) on a shared one.
+  tuning:
+    enabled: false
+    # -- NodeConfig metadata.name.
+    name: scylla-tuning
+    # -- Node selector that picks the dedicated Scylla nodes to tune. Must
+    # match the labels on your Scylla nodepool.
+    nodeSelector:
+      workload: scylla
+    # -- Tolerations so the operator's perftune DaemonSet pods can schedule
+    # onto the (tainted) dedicated Scylla nodes.
+    tolerations:
+      - key: scylla-db
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
 
   # -- Backup schedule (Scylla Manager). Set to {} to disable.
   backups:

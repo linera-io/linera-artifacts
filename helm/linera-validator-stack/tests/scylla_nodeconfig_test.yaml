@@ -1,0 +1,56 @@
+suite: scylla-nodeconfig
+templates:
+  - scylla-nodeconfig.yaml
+release:
+  name: rel
+tests:
+  - it: emits no NodeConfig by default (tuning disabled)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a NodeConfig when tuning is enabled
+    set:
+      scylla.tuning.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: NodeConfig
+      - equal:
+          path: apiVersion
+          value: scylla.scylladb.com/v1alpha1
+      - equal:
+          path: metadata.name
+          value: scylla-tuning
+      - equal:
+          path: spec.placement.nodeSelector.workload
+          value: scylla
+      - equal:
+          path: spec.placement.tolerations[0].key
+          value: scylla-db
+      - equal:
+          path: spec.placement.tolerations[0].effect
+          value: NoSchedule
+
+  - it: skips the NodeConfig when scylla itself is disabled
+    set:
+      scylla.enabled: false
+      scylla.tuning.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: honours a custom nodeSelector and name
+    set:
+      scylla.tuning.enabled: true
+      scylla.tuning.name: custom-tuning
+      scylla.tuning.nodeSelector:
+        node-pool: scylla-dedicated
+    asserts:
+      - equal:
+          path: metadata.name
+          value: custom-tuning
+      - equal:
+          path: spec.placement.nodeSelector["node-pool"]
+          value: scylla-dedicated
