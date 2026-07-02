@@ -1,0 +1,61 @@
+suite: scylla-recording-rules
+templates:
+  - scylla-recording-rules.yaml
+release:
+  name: rel
+tests:
+  - it: renders nothing by default (opt-in)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when only alerts are enabled
+    set:
+      prometheusRule.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when only recordingRules are enabled (needs both flags)
+    set:
+      prometheusRule.recordingRules.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders Scylla recording rules when both flags are enabled
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.recordingRules.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PrometheusRule
+      - equal:
+          path: metadata.name
+          value: rel-linera-validator-scylla-recording
+      - isNotEmpty:
+          path: spec.groups
+      - equal:
+          path: spec.groups[0].name
+          value: scylla.latency.rules
+      - equal:
+          path: spec.groups[1].name
+          value: scylla.table.rules
+      - contains:
+          path: spec.groups[?(@.name=="scylla.latency.rules")].rules
+          content:
+            record: cql:all_shardrate1m
+          any: true
+
+  - it: carries chart labels and no hardcoded GKE namespace/release
+    set:
+      prometheusRule.enabled: true
+      prometheusRule.recordingRules.enabled: true
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/managed-by"]
+          value: Helm
+      - notExists:
+          path: metadata.namespace
