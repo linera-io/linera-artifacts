@@ -15,7 +15,6 @@ workloads (shards + proxy).
 |---------------------------|-----------------------------|------------------------|--------------------------------------------------|
 | Kubernetes (reference)    | 2 × (8 vCPUs / 64 GB)       | 1 TB fast SSD          | What we run in production. Scylla gets its own node. |
 | Single-host Docker Compose| 1 × (16 cores / 128 GB)     | 1 TB fast SSD          | The sum of the two reference machines on one box. |
-| Light testing only        | 1 × (16 cores / 64 GB)      | 500 GB SSD             | Runs, but Scylla is squeezed — do not expect to keep up with sustained mainnet-level traffic. |
 
 **ScyllaDB is the bottleneck, and it sets the floor: never plan a
 validator around giving ScyllaDB less than a full 8 vCPUs / 64 GB
@@ -48,8 +47,6 @@ What meets it:
   The reference validators run GCP `pd-ssd` at 1 TB (≈30,000 IOPS,
   ≈480 MB/s). On AWS, `gp3` must be explicitly provisioned above its
   3,000 IOPS / 125 MB/s baseline; on OVH, use the high-speed class.
-- **Local SATA SSD** — works in a pinch; expect higher tail latencies
-  than NVMe.
 
 What does not:
 
@@ -117,7 +114,8 @@ the shards, you need the sum of the two reference machines:
 | Watchtower  | 0.25       | 256 MiB                    | —                                  |
 
 Set `LIMIT_CPUS_SCYLLA=7` and `LIMIT_MEM_SCYLLA=51G` in `.env` to get
-this (the shipped defaults are sized for smaller boxes).
+this — the shipped defaults are conservative and **must** be raised to
+these values on a properly sized host.
 
 Two things to know about this table:
 
@@ -134,11 +132,10 @@ Two things to know about this table:
   (`SCYLLA_CPUSET`) on a dedicated box, do it — see
   [Docker Compose reference](DOCKER-COMPOSE.md).
 
-If your host is smaller, the shipped `.env` defaults (Scylla 4c / 30 GiB)
-keep everything functional on 16 cores / 64 GB, at reduced throughput —
-acceptable for light testing, not for keeping up with sustained
-production traffic. Override `LIMIT_CPUS_*` / `LIMIT_MEM_*` in `.env` as
-your hardware allows; ScyllaDB first, always.
+Hosts smaller than this will not keep up with sustained production
+traffic — ScyllaDB gets squeezed first and the OOM cycle described
+above sets in. Size the box to the table; when allocating, ScyllaDB
+first, always.
 
 ## Why ScyllaDB needs ≥ 1 GiB per shard
 
@@ -158,9 +155,7 @@ rule of thumb to size is:
 ```
 
 The recommended `7 cores / 51 GiB` leaves ≈7.0 GiB usable per Scylla
-shard — the same as the reference validators. The small-host default
-`4 cores / 30 GiB` leaves ≈7 GiB per shard as well; what you lose there
-is parallelism and cache, not per-shard headroom.
+shard — the same as the reference validators.
 
 If you raise `LIMIT_CPUS_SCYLLA` to use more cores, raise
 `LIMIT_MEM_SCYLLA` proportionally — that's the only knob you need to
