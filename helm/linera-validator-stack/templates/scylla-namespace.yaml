@@ -1,0 +1,13 @@
+{{- if and .Values.scylla.enabled .Values.scylla.createNamespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.scylla.namespace | quote }}
+  labels:
+    {{- include "linera-validator-stack.labels" . | nindent 4 }}
+  annotations:
+    # Create the namespace before the ScyllaCluster / scylla-config that live
+    # in it (they are not in the Helm release namespace, so nothing else
+    # creates it).
+    argocd.argoproj.io/sync-wave: "-1"
+{{- end }}
