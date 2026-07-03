@@ -58,9 +58,15 @@ scylla:
   # only useful for kind / minikube / single-node test clusters.
   developerMode: false
 
-  # -- Namespace where the ScyllaCluster lives. The chart does NOT create
-  # this namespace — create it ahead of time or let scylla-operator do it.
+  # -- Namespace where the ScyllaCluster lives.
   namespace: scylla
+
+  # -- Create the `namespace` above. The ScyllaCluster + scylla-config live
+  # in it, but it is NOT the Helm release namespace, so ArgoCD's
+  # CreateNamespace / Helm's --create-namespace do not cover it. Rendered in
+  # sync-wave -1 so it exists before those resources. A pre-existing namespace
+  # is adopted (server-side apply). Set false to manage it out-of-band.
+  createNamespace: true
 
   # -- ScyllaCluster name. Used by the auto-generated client Service
   # (scylla-client.<namespace>.svc.cluster.local).
