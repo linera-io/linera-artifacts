@@ -10,6 +10,19 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this
 (by the DNS naming spec).
 */}}
+{{/*
+Component name prefix. Default (useComponentPrefix=false) = clean names
+(proxy, shards, proxy-internal) matching what linera-network-init mints.
+useComponentPrefix=true prefixes `<fullname>-` for legacy deployments whose
+minted server config references validator-proxy/validator-shards — the
+minted internal gRPC hostnames must always match these resource names.
+*/}}
+{{- define "linera-validator.componentPrefix" -}}
+{{- if .Values.useComponentPrefix -}}
+{{- printf "%s-" (include "linera-validator.fullname" .) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "linera-validator.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}

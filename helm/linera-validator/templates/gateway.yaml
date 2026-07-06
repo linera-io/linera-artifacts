@@ -28,7 +28,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy
+  name: {{ include "linera-validator.componentPrefix" . }}proxy
   labels:
     {{- include "linera-validator.labels" . | nindent 4 }}
 spec:
@@ -38,6 +38,6 @@ spec:
     - {{ .Values.gateway.hostname | quote }}
   rules:
     - backendRefs:
-        - name: {{ include "linera-validator.fullname" . }}-proxy
+        - name: {{ include "linera-validator.componentPrefix" . }}proxy
           port: {{ .Values.ports.proxy }}
 {{- end }}

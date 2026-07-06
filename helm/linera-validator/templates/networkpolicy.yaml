@@ -20,7 +20,7 @@ Three policies:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy
+  name: {{ include "linera-validator.componentPrefix" . }}proxy
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
 spec:
@@ -76,7 +76,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-shards
+  name: {{ include "linera-validator.componentPrefix" . }}shards
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
 spec:

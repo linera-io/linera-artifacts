@@ -18,11 +18,11 @@ tests:
       - documentIndex: 0
         equal:
           path: metadata.name
-          value: rel-linera-validator-proxy
+          value: proxy
       - documentIndex: 1
         equal:
           path: metadata.name
-          value: rel-linera-validator-shards
+          value: shards
 
   - it: emits default-deny when requested
     set:

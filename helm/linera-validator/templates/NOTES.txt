@@ -33,9 +33,9 @@ Check pod status:
 
 Tail logs:
   kubectl --namespace {{ .Release.Namespace }} logs -f \
-    statefulset/{{ include "linera-validator.fullname" . }}-shards
+    statefulset/{{ include "linera-validator.componentPrefix" . }}shards
   kubectl --namespace {{ .Release.Namespace }} logs -f \
-    statefulset/{{ include "linera-validator.fullname" . }}-proxy
+    statefulset/{{ include "linera-validator.componentPrefix" . }}proxy
 
 {{- if .Values.gateway.enabled }}
 

@@ -12,7 +12,7 @@ node) rather than rely on a PDB to decide for them.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy
+  name: {{ include "linera-validator.componentPrefix" . }}proxy
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
 spec:

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-shards
+  name: {{ include "linera-validator.componentPrefix" . }}shards
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
 spec:
@@ -19,11 +19,11 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-shards
+  name: {{ include "linera-validator.componentPrefix" . }}shards
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "shards") | nindent 4 }}
 spec:
-  serviceName: {{ include "linera-validator.fullname" . }}-shards
+  serviceName: {{ include "linera-validator.componentPrefix" . }}shards
   replicas: {{ .Values.shards.replicas }}
   podManagementPolicy: Parallel
   selector:

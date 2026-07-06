@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy-internal
+  name: {{ include "linera-validator.componentPrefix" . }}proxy-internal
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
 spec:
@@ -18,7 +18,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy
+  name: {{ include "linera-validator.componentPrefix" . }}proxy
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
   {{- with .Values.proxies.service.annotations }}
@@ -43,11 +43,11 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "linera-validator.fullname" . }}-proxy
+  name: {{ include "linera-validator.componentPrefix" . }}proxy
   labels:
     {{- include "linera-validator.componentLabels" (dict "context" . "component" "proxy") | nindent 4 }}
 spec:
-  serviceName: {{ include "linera-validator.fullname" . }}-proxy-internal
+  serviceName: {{ include "linera-validator.componentPrefix" . }}proxy-internal
   replicas: {{ .Values.proxies.replicas }}
   podManagementPolicy: Parallel
   selector:
