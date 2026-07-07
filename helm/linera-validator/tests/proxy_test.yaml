@@ -17,7 +17,7 @@ tests:
       - documentIndex: 0
         equal:
           path: metadata.name
-          value: rel-linera-validator-proxy-internal
+          value: proxy-internal
       - documentIndex: 0
         equal:
           path: spec.clusterIP
@@ -28,7 +28,7 @@ tests:
       - documentIndex: 1
         equal:
           path: metadata.name
-          value: rel-linera-validator-proxy
+          value: proxy
       - documentIndex: 1
         equal:
           path: spec.type

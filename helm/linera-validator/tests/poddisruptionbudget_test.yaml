@@ -12,7 +12,7 @@ tests:
           of: PodDisruptionBudget
       - equal:
           path: metadata.name
-          value: rel-linera-validator-proxy
+          value: proxy
       - equal:
           path: spec.minAvailable
           value: 1

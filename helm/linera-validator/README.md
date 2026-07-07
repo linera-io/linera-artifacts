@@ -1,6 +1,6 @@
 # linera-validator
 
-![Version: 0.1.5](https://img.shields.io/badge/Version-0.1.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.1.6](https://img.shields.io/badge/Version-0.1.6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Linera validator core: the shards (StatefulSet) and proxies (StatefulSet)
 that together form a single validator on the Linera network.
@@ -184,6 +184,7 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | storage.rocksdbSize | string | `"2Gi"` | RocksDB volume size per shard (only used when storage.dual is true). |
 | storage.rocksdbStorageClass | string | `""` | StorageClass for the RocksDB PVCs. Empty = cluster default. |
 | storage.uri | string | `"scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042"` |  |
+| useComponentPrefix | bool | `false` | Prefix component resource names (StatefulSets/Services) with `<fullname>-`. Default false = clean names (proxy, shards, proxy-internal) matching what linera-network-init mints. Set true for legacy deployments whose minted server config references the prefixed names (validator-proxy, ...) — flipping it on a live release RENAMES StatefulSets/Services (delete + recreate) and breaks the internal gRPC mesh unless the minted hostnames are changed to match. |
 | validator.existingSecret | string | `""` | Use an existing Secret instead of inlining configs above. The Secret must contain two keys: "serverConfig" and "genesisConfig". |
 | validator.genesisConfigData | string | `""` | Genesis config JSON (public). Distributed to every validator in the same network. Inline as a string here, or use existingSecret. |
 | validator.serverConfigData | string | `""` | Server config JSON (PRIVATE — contains the validator signing key). Inline as a string here, or use existingSecret. |

@@ -25,6 +25,15 @@ commonLabels: {}
 # Container image
 # =============================================================================
 
+# -- Prefix component resource names (StatefulSets/Services) with
+# `<fullname>-`. Default false = clean names (proxy, shards,
+# proxy-internal) matching what linera-network-init mints. Set true for
+# legacy deployments whose minted server config references the prefixed
+# names (validator-proxy, ...) — flipping it on a live release RENAMES
+# StatefulSets/Services (delete + recreate) and breaks the internal
+# gRPC mesh unless the minted hostnames are changed to match.
+useComponentPrefix: false
+
 image:
   # -- Image repository for the linera binaries (REQUIRED).
   repository: ""

@@ -725,6 +725,10 @@
                 }
             }
         },
+        "useComponentPrefix": {
+            "description": "Prefix component resource names (StatefulSets/Services) with `<fullname>-`. Default false = clean names (proxy, shards, proxy-internal) matching what linera-network-init mints. Set true for legacy deployments whose minted server config references the prefixed names.",
+            "type": "boolean"
+        },
         "validator": {
             "type": "object",
             "properties": {

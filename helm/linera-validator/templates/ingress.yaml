@@ -27,7 +27,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "linera-validator.fullname" $ }}-proxy
+                name: {{ include "linera-validator.componentPrefix" $ }}proxy
                 port:
                   name: grpc
           {{- end }}
