@@ -1,6 +1,6 @@
 # linera-validator-stack
 
-![Version: 0.1.8](https://img.shields.io/badge/Version-0.1.8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.1.9](https://img.shields.io/badge/Version-0.1.9-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Umbrella chart that installs everything needed to run a Linera
 validator in one shot: the validator (shards + proxies), an optional
@@ -74,7 +74,7 @@ helm install validator-1 \
 | Repository | Name | Version |
 |------------|------|---------|
 | file://../linera-block-exporter | linera-block-exporter | 0.1.4 |
-| file://../linera-validator | linera-validator | 0.1.6 |
+| file://../linera-validator | linera-validator | 0.1.7 |
 
 ## Values
 
