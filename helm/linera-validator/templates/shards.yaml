@@ -142,7 +142,8 @@ spec:
                 --server /config/server.json \
                 --shard "$ORDINAL" \
                 --storage-replication-factor {{ .Values.storage.replicationFactor | quote }} \
-                {{- include "linera-validator.cliFlags" .Values.shards.cli | nindent 16 }}
+                {{- /* blockCacheSize + executionStateCacheSize are top-level (non-global) args on `linera-server`, NOT `run` args — passing them here fails on binaries that place them at the top level. They are delivered via env (LINERA_BLOCK_CACHE_SIZE / LINERA_EXECUTION_STATE_CACHE_SIZE) below, which every binary that has them reads and any that doesn't ignores. */}}
+                {{- include "linera-validator.cliFlags" (omit .Values.shards.cli "blockCacheSize" "executionStateCacheSize") | nindent 16 }}
           ports:
             - name: grpc
               containerPort: {{ .Values.ports.shard }}
@@ -157,6 +158,14 @@ spec:
               value: {{ .Values.log.backtrace | quote }}
             - name: LINERA_OTLP_EXPORTER_ENDPOINT
               value: {{ .Values.otlpExporterEndpoint | quote }}
+            {{- with .Values.shards.cli.blockCacheSize }}
+            - name: LINERA_BLOCK_CACHE_SIZE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.shards.cli.executionStateCacheSize }}
+            - name: LINERA_EXECUTION_STATE_CACHE_SIZE
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.shards.serverTokioThreads }}
             - name: LINERA_SERVER_TOKIO_THREADS
               value: {{ . | quote }}

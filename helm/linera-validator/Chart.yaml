@@ -12,7 +12,7 @@ type: application
 
 # Chart version - bump for any change to templates or default values.
 # Follows SemVer.
-version: 0.1.6
+version: 0.1.7
 
 # Application version - matches the supported linera binary release.
 # Bump when targeting a new linera-protocol release.
