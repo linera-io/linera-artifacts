@@ -42,7 +42,9 @@ ScyllaDB's throughput is bounded by storage I/O. The requirement is a
 What meets it:
 
 - **Local NVMe** — exceeds every number above by an order of magnitude.
-  The safest choice on bare metal.
+  The safest choice on bare metal. If the box has more than one drive,
+  put the ScyllaDB data directory on its own — compaction then never
+  competes with the OS, logs, or Docker images for the disk queue.
 - **Provisioned cloud SSD** — acceptable *if provisioned to the floor*.
   The reference validators run GCP `pd-ssd` at 1 TB (≈30,000 IOPS,
   ≈480 MB/s). On AWS, `gp3` must be explicitly provisioned above its
@@ -128,9 +130,10 @@ Two things to know about this table:
 - **A single host cannot replicate the reference isolation.** On GKE,
   Scylla shares its node with nothing; on one box it shares the kernel,
   page cache, NIC and disk queue with everything else. The extra RAM
-  headroom is what compensates. If you can pin Scylla's cores
-  (`SCYLLA_CPUSET`) on a dedicated box, do it — see
-  [Docker Compose reference](DOCKER-COMPOSE.md).
+  headroom is what compensates. If you can pin Scylla's cores, do it —
+  set `SCYLLA_CPUSET` *and* the complementary `WORKLOAD_CPUSET`
+  together, aligned to your CPU's SMT/die topology — see
+  [Choosing which cores to pin](DOCKER-COMPOSE.md#choosing-which-cores-to-pin).
 
 Hosts smaller than this will not keep up with sustained production
 traffic — ScyllaDB gets squeezed first and the OOM cycle described
@@ -160,7 +163,7 @@ shard — the same as the reference validators.
 If you raise `LIMIT_CPUS_SCYLLA` to use more cores, raise
 `LIMIT_MEM_SCYLLA` proportionally — that's the only knob you need to
 touch. See
-[ScyllaDB sizing](DOCKER-COMPOSE.md#scylladb-sizing--how---smp-and---memory-work)
+[ScyllaDB sizing](DOCKER-COMPOSE.md#scylladb-sizing-how-smp-and-memory-work)
 for the full table and a worked example.
 
 ## Operating-system requirements

@@ -223,27 +223,74 @@ LIMIT_MEM_SCYLLA=24G
 
 By default the stack assumes ScyllaDB **shares** the host with the
 shards, the proxy, and Caddy: it runs with `--overprovisioned 1` and no
-CPU pinning. On a box where you can give ScyllaDB its own cores, two
+CPU pinning. On a box where you can give ScyllaDB its own cores, three
 opt-in knobs move it toward GKE-class isolation:
 
 | Variable                | Default | Effect                                                                 |
 |-------------------------|---------|------------------------------------------------------------------------|
-| `SCYLLA_CPUSET`         | *(unset)* | Pins the ScyllaDB container to specific physical cores (Docker `cpuset`). E.g. `0-7`. |
+| `SCYLLA_CPUSET`         | *(unset)* | Pins the ScyllaDB container to specific logical CPUs (Docker `cpuset`). E.g. `0-15`. |
+| `WORKLOAD_CPUSET`       | *(unset)* | Pins everything else (shards, proxy, Caddy, Watchtower) to the complementary logical CPUs. |
 | `SCYLLA_OVERPROVISIONED`| `1`     | Set to `0` on a dedicated box so ScyllaDB stops yielding CPU it assumes others need. |
 
-On a 16-core host, for example, pin ScyllaDB to half the cores and leave
-the rest for the shards and proxy:
+Set the two cpusets **together**. `SCYLLA_CPUSET` alone confines
+ScyllaDB but does not protect it: the kernel is still free to schedule
+the shards onto ScyllaDB's cores. The `LIMIT_CPUS_*` variables can't
+help here — those are cgroup *quotas* that cap how much CPU time a
+service gets, not *which* cores it runs on. The `WORKLOAD_CPUSET`
+fence is what makes the isolation two-sided. A cpuset is a hard
+scheduler guarantee: a pinned container can never run outside its set.
+
+On a 16-core / 32-thread host, for example:
 
 ```bash
-SCYLLA_CPUSET=0-7
+SCYLLA_CPUSET=0-15        # ScyllaDB owns the first die — private L3
+WORKLOAD_CPUSET=18-31     # everything else on the second die
 SCYLLA_OVERPROVISIONED=0
-LIMIT_CPUS_SCYLLA=8
-LIMIT_MEM_SCYLLA=24G
+LIMIT_CPUS_SCYLLA=16      # match the cpuset size (drives --smp)
+LIMIT_MEM_SCYLLA=51G      # keep ≥ ~1.2 GiB per Scylla shard
 ```
 
-Reserve a **disjoint** core range for the rest of the stack
-(`LIMIT_CPUS_SHARD_N`, `LIMIT_CPUS_PROXY`) so the pinning actually buys
-isolation rather than oversubscribing the pinned cores.
+CPUs 16–17 are deliberately left out of both sets: the OS, Docker, and
+network interrupt handlers need somewhere to run that is not ScyllaDB's
+cores. ScyllaDB's own tuning guidance reserves cores for network IRQs
+the same way.
+
+### Choosing which cores to pin
+
+`cpuset` values are **logical CPU numbers**, and which numbers map to
+which physical core differs between machines. Check `lscpu -e` before
+picking ranges — there are two traps:
+
+- **SMT siblings.** On a hyperthreaded machine, two logical CPUs share
+  each physical core's execution units. If one sibling lands in
+  `SCYLLA_CPUSET` and the other in `WORKLOAD_CPUSET`, a shard can still
+  steal cycles from ScyllaDB through the shared core and the fence is
+  cosmetic. Keep sibling pairs on the same side of the split.
+- **Cache/die boundaries.** On chiplet CPUs (AMD Ryzen/EPYC CCDs), each
+  die has its own L3 cache. Align the split to a die boundary and
+  ScyllaDB gets a *private* L3 — the shards can't evict its working
+  set. Cache isolation on top of CPU isolation, for free.
+
+`lscpu -e` shows both. On a 16-core/32-thread AMD Ryzen (two 8-core
+dies, SMT siblings adjacent — CPUs 0,1 = core 0, CPUs 2,3 = core 1, …):
+
+```console
+$ lscpu -e=CPU,CORE,L3
+CPU CORE L3
+  0    0  0    # CPUs 0-15  = cores 0-7  = die 0
+  1    0  0
+  2    1  0
+...
+ 16    8  1    # CPUs 16-31 = cores 8-15 = die 1
+ 17    8  1
+...
+```
+
+→ `SCYLLA_CPUSET=0-15` (all of die 0, private L3),
+`WORKLOAD_CPUSET=18-31` (die 1 minus one core left for the OS). Other
+machines number differently — on many Intel parts the sibling of CPU 0
+is CPU 16, not CPU 1 — so derive the ranges from **your** `lscpu -e`
+output, never copy an example.
 
 ### Commitlog durability
 
@@ -264,9 +311,9 @@ fast (ideally XFS, see below) disk, the single-host stack scales
 it **cannot** match is GKE's physical isolation: there, ScyllaDB gets
 its own dedicated nodes with perftune CPU pinning, IRQ steering off the
 Scylla cores, and a separate kernel/NIC, while here it shares the kernel,
-disks, and NICs with the shards and proxy. `SCYLLA_CPUSET` approximates
-the CPU half of that; the rest is a hard limit of single-host
-co-tenancy. For full isolation and HA, use the Helm path with a real
+disks, and NICs with the shards and proxy. The `SCYLLA_CPUSET` /
+`WORKLOAD_CPUSET` pair approximates the CPU half of that; the rest is a
+hard limit of single-host co-tenancy. For full isolation and HA, use the Helm path with a real
 ScyllaDB cluster.
 
 ## Upgrading .env safely
@@ -307,6 +354,11 @@ mounted at `/mnt/scylla`, pass it to `deploy-validator.sh`:
 That emits a `docker-compose.override.yml` that bind-mounts
 `/mnt/scylla/scylla-data` into the Scylla container.
 
+If the machine has more than one NVMe drive, dedicate one to the
+ScyllaDB data directory (XFS or not): compaction is the dominant I/O
+load on a validator, and a drive that the OS, logs, and Docker images
+never touch removes the last source of disk contention.
+
 ## Observability (optional)
 
 The Linera binary can push metrics/logs/traces to an OTLP-compatible
@@ -323,7 +375,18 @@ loop also picks up config changes on restart.
 
 ## Limitations
 
-- Single-validator, single-host. No HA, no replication across machines.
+- Single-validator, single-host. Compose drives one Docker Engine on
+  one machine: no scheduling across hosts, no replication, no HA — if
+  the box dies, the validator is down until you restore it. Docker
+  Swarm is not an escape hatch: swarm services cannot pin CPUs at all
+  ([moby/moby#30477](https://github.com/moby/moby/issues/30477)), so
+  scaling out through Swarm silently drops the ScyllaDB isolation
+  configured above. The supported multi-machine path is the Helm chart.
+- A single validator being offline is an event the network tolerates —
+  BFT consensus keeps making progress without it. What a single-host
+  operator should plan for is **recovery time**, not single-box HA:
+  know where the replacement hardware comes from, and that losing the
+  ScyllaDB volume means re-syncing from genesis.
 - ScyllaDB runs as a single node (RF=1). Safe for dev and single-validator
   production; you need a real Scylla cluster for higher availability.
 - Vertical scaling only: with GKE-parity caches and dedicated-core ScyllaDB
