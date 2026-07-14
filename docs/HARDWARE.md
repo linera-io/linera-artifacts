@@ -71,7 +71,7 @@ repeat:
 This is *not* solvable by raising memory limits. The root cause is I/O,
 not RAM.
 
-Filesystem on the data directory: ext4 or XFS. XFS is mildly preferred
+Filesystem on the data directory: ext4 or XFS. XFS is preferred
 by ScyllaDB for very large datasets but ext4 is fine for testnet
 workloads.
 
