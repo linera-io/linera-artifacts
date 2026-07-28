@@ -36,7 +36,11 @@ cd linera-artifacts
 2. Generates a matching `validator-config.toml`
 3. Runs the linera image to generate a fresh `server.json` (your
    signing key — private, treat like an SSH key)
-4. Renders `.env` from `.env.production.template`
+4. Writes `.env` from `.env.production.template` **with your values filled
+   in** — `DOMAIN`, `ACME_EMAIL`, `GENESIS_URL`, `GENESIS_BUCKET`,
+   `GENESIS_PATH_PREFIX`, `VALIDATOR_KEY`, `VALIDATOR_NAME`, `HOSTNAME`,
+   `LINERA_IMAGE`, `NUM_SHARDS`. Re-running is safe: an existing `.env` is
+   backed up and only those keys are patched, so your tuning survives.
 5. Starts the stack with `docker compose up -d --wait`
 
 Options:
@@ -60,7 +64,8 @@ cd docker
 
 # 1. Env file from template
 cp .env.production.template .env
-#    Edit DOMAIN, ACME_EMAIL, VALIDATOR_NAME, VALIDATOR_KEY.
+#    Edit DOMAIN and ACME_EMAIL. Everything else is optional and already
+#    defaulted — see "Configuration via .env" below.
 
 # 2. Genesis
 wget -O genesis.json \
@@ -106,18 +111,34 @@ docker compose up -d --wait
 
 The canonical reference is
 [`.env.production.template`](https://github.com/linera-io/linera-artifacts/blob/main/docker/.env.production.template).
+
+**Required: `DOMAIN` and `ACME_EMAIL`.** That is the whole list. Every other
+variable in the template — bar `HOSTNAME`, covered below — is commented out
+and the value shown beside it is the default the stack already applies, so
+uncomment a line only to change it. The other two things a validator needs
+— `server.json` and `genesis.json` — are files, not variables: the `docker/`
+directory is bind-mounted at `/config` and the containers read both from
+there.
+
+A few variables in the template are recorded by `deploy-validator.sh` but
+read by no container: `GENESIS_URL`, `GENESIS_BUCKET`, `GENESIS_PATH_PREFIX`
+(they tell the *script* where to fetch genesis from), and `VALIDATOR_KEY` /
+`VALIDATOR_NAME` (informational — the key in use is `server.json`). Editing
+them does not change what runs. `HOSTNAME` is used only by the observability
+overlays, as a metrics/logs label.
+
 Key variables:
 
 | Variable              | Default                               | Notes                                                                                      |
 |-----------------------|---------------------------------------|--------------------------------------------------------------------------------------------|
 | `DOMAIN`              | `your-domain.example.com`             | Public hostname. Caddy obtains a Let's Encrypt cert for this.                              |
 | `ACME_EMAIL`          | `admin@example.com`                   | Registered with Let's Encrypt.                                                             |
-| `GENESIS_URL`         | `…/testnet-conway/genesis.json`       | Public genesis file to use.                                                                |
+| `GENESIS_URL`         | `…/testnet-conway/genesis.json`       | Where `deploy-validator.sh` fetches genesis from. The stack itself reads `./genesis.json`. |
 | `LINERA_IMAGE`        | `…/linera-public-registry/linera:testnet_conway_release` | Upstream image. Update to change network compatibility.                |
 | `SCYLLA_DEVELOPER_MODE` | `0`                                 | Set to `1` only for local testing (skips ScyllaDB io_setup checks).                       |
 | `STORAGE_REPLICATION_FACTOR` | `1`                            | Matches single-node Scylla. Do not change without a Scylla cluster.                         |
 | `PROXY_PORT`          | `19100`                               | Host port the proxy is bound to (behind Caddy on 443).                                     |
-| `LIMIT_CPUS_SHARD_N` / `LIMIT_MEM_SHARD_N` | per-shard                | Resource limits (honored in swarm or with `docker compose --compatibility`).               |
+| `LIMIT_CPUS_SHARD_N` / `LIMIT_MEM_SHARD_N` | per-shard                | Per-shard cgroup CPU / memory limits. Applied by `docker compose up` on Compose v2.        |
 | `LINERA_EXECUTION_STATE_CACHE_SIZE` | `20000`                 | Matches the GKE validators. Lower on a small/low-RAM box to save RAM. Shard-only.          |
 | `LINERA_BLOCK_CACHE_SIZE` | `20000`                           | Matches the GKE validators. Lower on a small/low-RAM box to save RAM. Shard-only.          |
 | `WATCHTOWER_INTERVAL` | `30`                                  | Seconds between image-update checks.                                                       |

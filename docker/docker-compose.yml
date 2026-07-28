@@ -11,22 +11,23 @@
 #
 # Usage:
 #   1. cp .env.production.template .env
-#   2. Fill in DOMAIN, ACME_EMAIL, VALIDATOR_NAME, VALIDATOR_KEY, and
-#      (if different) GENESIS_URL.
+#   2. Fill in DOMAIN and ACME_EMAIL. Everything else in the template is
+#      optional and already defaulted.
 #   3. Put your server.json (contains the signing key) and
-#      genesis.json in this directory.
+#      genesis.json in this directory. This directory is bind-mounted at
+#      /config, so the containers read both files from here.
 #   4. docker compose up -d
 #
 # The scripts/deploy-validator.sh helper automates steps 1-4 for
 # new deployments. See docs/DOCKER-COMPOSE.md for the full reference.
 #
 # Optional overlays (layered with `-f`):
-#   docker-compose.observability-push.yml  → Grafana Alloy pushing
-#                                            metrics/logs/traces to a
-#                                            remote backend
-#   docker-compose.observability-local.yml → Prometheus + Grafana +
-#                                            Loki + Tempo running on
-#                                            the same host
+#   docker-compose.alloy.yml            → Grafana Alloy pushing
+#                                         metrics/logs/traces to a
+#                                         remote backend
+#   docker-compose.local-monitoring.yml → Prometheus + Grafana +
+#                                         Loki + Tempo running on
+#                                         the same host
 # =============================================================================
 
 # Default logging policy applied to every service via YAML anchor.
