@@ -34,11 +34,34 @@ That one command:
 1. Downloads the current network's `genesis.json` from the public Linera GCS bucket
 2. Generates a `validator-config.toml` matching the compose topology
 3. Generates your `server.json` (private signing key — **never share**)
-4. Renders a `.env` from `.env.production.template`
+4. Writes `docker/.env` from `.env.production.template` **with your values
+   filled in** — `DOMAIN`, `ACME_EMAIL`, `GENESIS_URL`, `GENESIS_BUCKET`,
+   `GENESIS_PATH_PREFIX`, `VALIDATOR_KEY`, `VALIDATOR_NAME`, `HOSTNAME`,
+   `LINERA_IMAGE` and `NUM_SHARDS`. It does not just copy the template; you
+   do not need to edit the result before starting.
 5. Brings the whole stack up
 
 At the end it prints your **public key**. Send it to the Linera network
 operators to register your validator.
+
+### What you actually have to provide
+
+The template lists a lot of variables, but almost all of them are commented
+out and already carry the value the stack uses, so a working deployment
+needs very little from you:
+
+- **Two variables** — `DOMAIN` and `ACME_EMAIL`. Caddy needs them for the
+  Let's Encrypt certificate; without a valid one the validator is not
+  reachable by the rest of the network.
+- **Two files** — `server.json` and `genesis.json`, in `docker/`. That
+  directory is bind-mounted at `/config`, so the containers read both from
+  disk rather than through `.env`.
+
+`deploy-validator.sh` produces all four for you. Everything else in the
+template is tuning: see the
+[Docker Compose reference](DOCKER-COMPOSE.md#configuration-via-env), and
+note that the storage/cache and ScyllaDB commitlog defaults are already the
+values the testnet-conway validators run in production.
 
 Watch the rollout:
 
