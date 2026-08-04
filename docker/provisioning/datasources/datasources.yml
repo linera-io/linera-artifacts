@@ -1,7 +1,13 @@
 apiVersion: 1
 
+# The `uid`s are pinned deliberately. Grafana generates a random uid for a
+# provisioned datasource that omits one, and both the dashboards in
+# `dashboards/` and the Tempo correlations below address these datasources by
+# uid (`prometheus`, `loki`). Without pinning, those references resolve only by
+# chance and panels render "Datasource not found".
 datasources:
   - name: Prometheus
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -9,12 +15,14 @@ datasources:
     editable: false
 
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://loki:3100
     editable: false
 
   - name: Tempo
+    uid: tempo
     type: tempo
     access: proxy
     url: http://tempo:3200

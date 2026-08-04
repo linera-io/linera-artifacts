@@ -4,7 +4,14 @@ global:
 
 rule_files:
   - /etc/prometheus/alerts.rules.yml
+  # Backs docker/dashboards/performance.json. Without this the Execution,
+  # Request and Storage latency panels have nothing to read.
+  - /etc/prometheus/recording.rules.yml
 
+# Job names and the `shard` label match alloy-config.river exactly, so the
+# dashboards work whichever of the two scrape paths you run. `shard` is not
+# emitted by the binaries — it exists only because the scrape config attaches
+# it, and the per-shard panels group by it.
 scrape_configs:
   # Alloy's own metrics (exposes a "targets" page at :12345).
   - job_name: 'alloy'
@@ -17,15 +24,22 @@ scrape_configs:
       - targets: ['cadvisor:8080']
 
   # Linera proxy.
-  - job_name: 'proxy'
+  - job_name: 'linera-proxy'
     static_configs:
       - targets: ['proxy:21100']
 
   # Linera shards.
-  - job_name: 'shards'
+  - job_name: 'linera-shard'
     static_configs:
-      - targets:
-          - 'docker-shard-1:21100'
-          - 'docker-shard-2:21100'
-          - 'docker-shard-3:21100'
-          - 'docker-shard-4:21100'
+      - targets: ['docker-shard-1:21100']
+        labels:
+          shard: '0'
+      - targets: ['docker-shard-2:21100']
+        labels:
+          shard: '1'
+      - targets: ['docker-shard-3:21100']
+        labels:
+          shard: '2'
+      - targets: ['docker-shard-4:21100']
+        labels:
+          shard: '3'

@@ -136,6 +136,9 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alerts.rules.yml:/etc/prometheus/alerts.rules.yml:ro
+      # Referenced from prometheus.yml `rule_files`; without this mount
+      # Prometheus fails to start on a missing rule file.
+      - ./recording.rules.yml:/etc/prometheus/recording.rules.yml:ro
       - ${PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"

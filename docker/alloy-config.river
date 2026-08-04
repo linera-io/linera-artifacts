@@ -100,6 +100,10 @@ prometheus.exporter.unix "host" {
   procfs_path = "/host/proc"
   sysfs_path  = "/host/sys"
 
+  // `set_collectors` REPLACES the default set, so anything not listed here is
+  // simply not collected. `pressure` and `schedstat` back the Saturation row of
+  // dashboards/performance.json (PSI stall time and run-queue wait) — the most
+  // direct evidence of a validator being starved of CPU, memory or IO.
   set_collectors = [
     "filesystem",
     "diskstats",
@@ -111,6 +115,8 @@ prometheus.exporter.unix "host" {
     "vmstat",
     "netdev",
     "time",
+    "pressure",
+    "schedstat",
   ]
 
   filesystem {
