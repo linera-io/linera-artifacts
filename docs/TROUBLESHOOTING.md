@@ -3,7 +3,7 @@
 Symptoms you are likely to see in `docker compose logs` (or `kubectl logs`) and
 what to do about them.
 
-## `NewCommittee event missing in storage`
+## A missing committee for an epoch
 
 **Symptom** — on a shard, repeatedly, and your validator answers few or no
 requests even though it is reachable and its ports are open:
@@ -16,6 +16,16 @@ WARN process_confirmed_block{chain_id=… height=…}: linera_storage:
     application_id: System, stream_name: StreamName(00) }, index: 47 }
 ```
 
+Newer builds report the same condition as an error rather than a warning:
+
+```
+Events not found: [EventId { chain_id: <admin-chain-id>, stream_id: StreamId {
+  application_id: System, stream_name: StreamName(00) }, index: 47 }]
+```
+
+Both mean the same thing. What identifies it is the **stream**, not the wording:
+`application_id: System` with `stream_name: StreamName(00)` is the epoch stream.
+
 **What it means** — your validator does not have the committee for that epoch,
 so it cannot check the signatures on blocks from any chain still at that epoch,
 and it rejects them. This is not a warning you can ignore: the block is not
@@ -27,8 +37,11 @@ validator only has the events from blocks it processed itself. A validator
 admitted at epoch 48 never saw epochs 1–47, and nothing backfills them
 automatically.
 
-The `chain_id` inside `event_id` **is** the admin chain — you do not need to look
-it up anywhere else. `index` is the epoch whose committee is missing.
+For an event on that epoch stream the `chain_id` **is** the admin chain — it is
+the only chain those events are ever published on, so you do not need to look it
+up anywhere else. `index` is the epoch whose committee is missing. (This holds
+for the epoch stream specifically; an `EventId` on any other stream names the
+chain that published it.)
 
 **Fix** — replay the admin chain into your validator. This needs no keys: a
 followed chain is one your wallet tracks without being able to sign for it.
@@ -75,6 +88,14 @@ They are worth a second look only if they persist at a high rate long after
 joining, or if they appear alongside the epoch warning above — in which case fix
 that first, since a validator that cannot accept certificates never accumulates
 anything.
+
+Both of these symptoms come from the same root: a validator that joined after
+genesis starts empty and only fills in as traffic reaches it. We are working on
+re-enabling the **block exporter**, which distributes blocks to every validator
+rather than leaving each one to accumulate whatever its clients happen to send.
+Once that is in place a newly joined validator converges on its own, and the
+manual replay above becomes a fallback rather than a step you are expected to
+run.
 
 ## Checking whether your validator is actually serving
 
