@@ -21,6 +21,29 @@ jobs:
           pip install yamllint==1.35.1
           yamllint --strict .
 
+  yaml-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: every YAML file uses .yaml
+        run: |
+          # RFC 9512 registers `yaml` as the preferred extension and names
+          # mixing both in one context as the interoperability hazard, which is
+          # the thing this guards against — not `.yml` in the abstract.
+          #
+          # artifacthub-repo.yml is exempt: Artifact Hub specifies that exact
+          # filename and does not document `.yaml` as accepted.
+          offenders=$(git ls-files '*.yml' | grep -v '^helm/[^/]*/artifacthub-repo\.yml$' || true)
+          if [ -n "$offenders" ]; then
+            echo "::error::These files must use the .yaml extension:"
+            printf '  %s\n' $offenders
+            echo
+            echo "Rename them and update every reference:"
+            echo "  git mv path/to/file.yml path/to/file.yaml"
+            exit 1
+          fi
+          echo "all YAML files use .yaml"
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

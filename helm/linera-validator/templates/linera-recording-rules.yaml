@@ -1,7 +1,7 @@
 {{/*
 Pre-computed recording rules for faster Grafana / PromQL queries on
 long time windows (used when a local monitoring stack is deployed in
-the cluster, e.g. via docker-compose.local-monitoring.yml or an
+the cluster, e.g. via docker-compose.local-monitoring.yaml or an
 in-cluster kube-prometheus-stack). When metrics are forwarded to a
 central observability backend, those queries are typically answered
 from there — leave this OFF to avoid duplicating work.

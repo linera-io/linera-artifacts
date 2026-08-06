@@ -10,8 +10,8 @@
 #
 # Usage:
 #   docker compose \
-#     -f docker-compose.yml \
-#     -f docker-compose.alloy.yml \
+#     -f docker-compose.yaml \
+#     -f docker-compose.alloy.yaml \
 #     up -d
 #
 # Required env in .env (no defaults — without a remote endpoint Alloy
@@ -21,7 +21,7 @@
 #   TEMPO_OTLP_URL,      TEMPO_OTLP_USER,      TEMPO_OTLP_PASS
 
 # YAML anchors are file-local — overlays must redeclare. See
-# docker-compose.yml header for context (logs caused 506 GB outage).
+# docker-compose.yaml header for context (logs caused 506 GB outage).
 x-logging: &default-logging
   driver: json-file
   options:

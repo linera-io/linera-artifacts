@@ -15,12 +15,12 @@ For full operator docs see <https://docs.infra.linera.net/>:
 
 | File                                  | Purpose                                                   |
 |---------------------------------------|-----------------------------------------------------------|
-| `docker-compose.yml`                  | Core: web, scylla, proxy, 4 shards, watchtower. Required. |
-| `docker-compose.alloy.yml`            | Optional overlay: push metrics/logs/traces to a remote Prometheus/Loki/Tempo. |
-| `docker-compose.local-monitoring.yml` | Optional overlay: local Prometheus + Grafana on the host. |
+| `docker-compose.yaml`                  | Core: web, scylla, proxy, 4 shards, watchtower. Required. |
+| `docker-compose.alloy.yaml`            | Optional overlay: push metrics/logs/traces to a remote Prometheus/Loki/Tempo. |
+| `docker-compose.local-monitoring.yaml` | Optional overlay: local Prometheus + Grafana on the host. |
 | `.env.production.template`            | Reference `.env`. Copy to `.env` (or use `scripts/deploy-validator.sh`). |
 | `dashboards/`                         | Grafana dashboards auto-loaded by the local-monitoring overlay. `performance.json` is the one Linera watches for its own validators. |
-| `recording.rules.yml`                 | Recording rules backing `dashboards/performance.json`. Loaded via `prometheus.yml`. |
+| `recording.rules.yaml`                 | Recording rules backing `dashboards/performance.json`. Loaded via `prometheus.yaml`. |
 | `Caddyfile`                           | Caddy config (TLS + reverse-proxy to linera-proxy).       |
 
 ## Quickstart

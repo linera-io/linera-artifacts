@@ -99,7 +99,7 @@ Ports:
 
 Dashboards in [`docker/dashboards/`](https://github.com/linera-io/linera-artifacts/tree/main/docker/dashboards); drop a
 new `.json` and re-`docker compose up` to pick it up. Alert rules in
-[`docker/alerts.rules.yml`](https://github.com/linera-io/linera-artifacts/blob/main/docker/alerts.rules.yml).
+[`docker/alerts.rules.yaml`](https://github.com/linera-io/linera-artifacts/blob/main/docker/alerts.rules.yaml).
 
 ### Layering it yourself
 
@@ -109,19 +109,19 @@ Without the deploy script:
 cd docker
 
 # Default (off)
-docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yaml up -d
 
 # Alloy push
-docker compose -f docker-compose.yml -f docker-compose.alloy.yml up -d
+docker compose -f docker-compose.yaml -f docker-compose.alloy.yaml up -d
 
 # Local monitoring
-docker compose -f docker-compose.yml -f docker-compose.local-monitoring.yml up -d
+docker compose -f docker-compose.yaml -f docker-compose.local-monitoring.yaml up -d
 
 # Both — alloy pushes AND on-box dashboards
 docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.alloy.yml \
-  -f docker-compose.local-monitoring.yml \
+  -f docker-compose.yaml \
+  -f docker-compose.alloy.yaml \
+  -f docker-compose.local-monitoring.yaml \
   up -d
 ```
 

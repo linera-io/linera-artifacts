@@ -20,7 +20,7 @@
 #   --xfs-path PATH     Bind-mount this XFS directory as the ScyllaDB data dir.
 #   --num-shards N      Number of shards in validator-config.toml (default: 4).
 #                       Must match the number of shard-N services in
-#                       docker-compose.yml.
+#                       docker-compose.yaml.
 #   --with-alloy        Add Grafana Alloy + cAdvisor; push metrics/
 #                       logs/traces to remote endpoints you set in
 #                       .env (PROMETHEUS_OTLP_URL etc.). What Linera
@@ -401,14 +401,14 @@ EOF
         fi
     fi
 
-    local -a compose_files=(-f docker-compose.yml)
+    local -a compose_files=(-f docker-compose.yaml)
     local -a obs_summary=()
     if [[ $with_alloy -eq 1 ]]; then
-        compose_files+=(-f docker-compose.alloy.yml)
+        compose_files+=(-f docker-compose.alloy.yaml)
         obs_summary+=(alloy)
     fi
     if [[ $with_local_monitoring -eq 1 ]]; then
-        compose_files+=(-f docker-compose.local-monitoring.yml)
+        compose_files+=(-f docker-compose.local-monitoring.yaml)
         obs_summary+=(local-monitoring)
     fi
     if [[ ${#obs_summary[@]} -eq 0 ]]; then
