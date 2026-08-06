@@ -1824,7 +1824,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(linera_num_blocks_executed, instance)",
+        "definition": "label_values(linera_value_cache_hit{job=~\"linera-.*\"}, instance)",
         "hide": 0,
         "includeAll": true,
         "label": "Validator Instance",
@@ -1833,14 +1833,15 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(linera_num_blocks_executed, instance)",
+          "query": "label_values(linera_value_cache_hit{job=~\"linera-.*\"}, instance)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
+        "type": "query",
+        "description": "Scrape targets making up this validator. Built from a metric BOTH the proxy and the shards emit — a shard-only metric would omit the proxy target on scrape configs that give each container its own `instance`."
       }
     ]
   },
