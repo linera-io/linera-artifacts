@@ -29,6 +29,49 @@ while it's under review.
 Only commits in a PR that has been reviewed and approved should land on
 `main`.
 
+## Signed commits
+
+**Every commit in a PR must be signed.** `main` is protected and rejects
+unsigned commits, so an otherwise-perfect PR shows as *blocked* with no
+merge button and no obvious explanation. Set this up before your first
+commit — it is much less annoying than re-signing history afterwards.
+
+Check what GitHub thinks of a commit with:
+
+```bash
+git log --show-signature -1
+```
+
+SSH signing is the least fiddly option if you already push over SSH — it
+reuses the key you have:
+
+```bash
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+git config --global commit.gpgsign true
+```
+
+Then add that same public key to your GitHub account **a second time**,
+with key type *Signing key* — an authentication key alone does not make
+commits show as Verified. GPG works equally well if you prefer it; see
+[telling Git about your signing
+key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key)
+and [adding a GPG
+key](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
+
+Already pushed unsigned commits? Sign them in place and force-push — the
+linear-history rule above means force-pushing your own PR branch is
+expected:
+
+```bash
+# a single commit
+git commit --amend --no-edit -S && git push --force-with-lease
+
+# several commits, where <base> is the commit before your first one
+git rebase --exec 'git commit --amend --no-edit -S' <base>
+git push --force-with-lease
+```
+
 ## Local checks
 
 Before pushing, please run:
