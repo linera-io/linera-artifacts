@@ -68,6 +68,7 @@ nav:
       - Docker Compose: DOCKER-COMPOSE.md
       - Post-setup operations: POST-SETUP.md
       - Observability: OBSERVABILITY.md
+      - Troubleshooting: TROUBLESHOOTING.md
       - Dev loop: DEV-LOOP.md
   - Examples: examples/README.md
   - Chart READMEs:
