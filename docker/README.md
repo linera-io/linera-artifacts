@@ -19,9 +19,9 @@ For full operator docs see https://docs.infra.linera.net/:
 | `docker-compose.remote-scylla.yaml`    | Optional overlay: use an external ScyllaDB host instead of the local ScyllaDB services. |
 | `docker-compose.alloy.yaml`            | Optional overlay for remote Prometheus/Loki/Tempo telemetry.                            |
 | `docker-compose.local-monitoring.yaml` | Optional local Prometheus + Grafana stack.                                              |
-| `.env.production.template`             | Reference environment configuration.                                                    |
-| `dashboards/`                          | Grafana dashboards for the monitoring stack.                                            |
-| `recording.rules.yaml`                 | Prometheus recording rules used by the performance dashboard.                           |
+| `.env.production.template`             | Reference `.env`. Copy to `.env`, or use `scripts/deploy-validator.sh`.                 |
+| `dashboards/`                          | Grafana dashboards auto-loaded by the local-monitoring overlay. `performance.json` is the one Linera watches for its own validators. |
+| `recording.rules.yaml`                 | Recording rules backing `dashboards/performance.json`. Loaded via `prometheus.yaml`.    |
 | `Caddyfile`                            | TLS and reverse-proxy configuration.                                                    |
 
 ## Quickstart
@@ -49,6 +49,17 @@ docker compose \
 
 The overlay disables the local `scylla` and `scylla-setup` services, removes Compose dependencies on the local database, and maps the existing `scylla` hostname used by the proxy and shards to the remote host.
 
+`SCYLLA_HOST` is required: leaving it unset fails immediately with an error
+rather than starting a stack that cannot reach its database. The overlay relies
+on the `!reset` and `!override` merge tags, so it needs a Docker Compose recent
+enough to support them — if yours does not, `docker compose config` will report
+the tags as unknown.
+
+Do not add `--profile local-scylla` to bring the local database back. That
+combination starts ScyllaDB but leaves the health-check waits removed and still
+resolves `scylla` to `$SCYLLA_HOST`. To use the local database, simply omit this
+overlay.
+
 The remote ScyllaDB endpoint should be exposed only over a trusted private network, such as a private VLAN or WireGuard tunnel.
 
 ## Tuning
@@ -57,8 +68,12 @@ Service limits, ports, image tags, and ScyllaDB settings are configured through 
 
 Important variables include:
 
-* `LIMIT_CPUS_*` / `LIMIT_MEM_*` — CPU and memory limits per service.
-* `LIMIT_CPUS_SCYLLA` — also controls ScyllaDB `--smp`.
-* `LIMIT_MEM_SCYLLA` — ScyllaDB container memory limit.
+* `LIMIT_CPUS_*` / `LIMIT_MEM_*` — cgroup CPU and memory budgets per service.
+  Defaults target a 16-core / 64 GB host.
+* `LIMIT_CPUS_SCYLLA` — also drives ScyllaDB's `--smp`. Increasing it on
+  existing data is fine; **reducing it requires a full data wipe.**
+* `LIMIT_MEM_SCYLLA` — cgroup memory limit for ScyllaDB. ScyllaDB reads this
+  directly via cgroup and reserves its own headroom (we do not pass
+  `--memory`). To grow ScyllaDB, just raise this number.
 
 See [`.env.production.template`](.env.production.template) for the complete configuration and inline documentation.

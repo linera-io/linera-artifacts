@@ -1,5 +1,12 @@
 services:
-  # Remote Scylla is used instead.
+  # Compose cannot delete a service in an override, so the local database is
+  # disabled by moving it behind a profile that is never enabled.
+  #
+  # Do NOT run this overlay with `--profile local-scylla` expecting the local
+  # database back: you would get a broken hybrid. The health-check waits below
+  # have been removed, and every container still resolves `scylla` to
+  # $SCYLLA_HOST via /etc/hosts, which wins over Docker's embedded DNS. Omit
+  # this overlay entirely to use the local database.
   scylla:
     profiles:
       - local-scylla
@@ -11,7 +18,7 @@ services:
   shard-init:
     depends_on: !reset {}
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
 
   proxy:
     depends_on: !override
@@ -20,21 +27,20 @@ services:
         required: true
 
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
 
   shard-0:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
 
   shard-1:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
 
   shard-2:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
 
   shard-3:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST}"
-
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
