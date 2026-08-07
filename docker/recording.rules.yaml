@@ -15,9 +15,9 @@
 # `job` label. That is what makes the dashboard portable: panels built on them
 # do not need to know how your Prometheus labels its scrape targets.
 #
-# Wire them up in prometheus.yml:
+# Wire them up in prometheus.yaml:
 #   rule_files:
-#     - /etc/prometheus/recording.rules.yml
+#     - /etc/prometheus/recording.rules.yaml
 #
 # Rules for storage backends you do not run (ScyllaDB or RocksDB) simply record
 # nothing; they are harmless to leave in place.

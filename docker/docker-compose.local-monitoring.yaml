@@ -15,26 +15,26 @@
 #                 Tempo, and (if configured via the *_OTLP_URL /
 #                 *_PUSH_URL env vars) ALSO pushes to a remote backend
 #   - Prometheus — on-box metrics storage with alert rules loaded
-#                  from ./alerts.rules.yml
+#                  from ./alerts.rules.yaml
 #   - Grafana    — dashboards pre-provisioned from ./dashboards/
 #   - Loki       — on-box log storage
 #   - Tempo      — on-box trace storage
 #
 # Usage:
 #   docker compose \
-#     -f docker-compose.yml \
-#     -f docker-compose.local-monitoring.yml \
+#     -f docker-compose.yaml \
+#     -f docker-compose.local-monitoring.yaml \
 #     up -d
 #
 # For just the Alloy push-only forwarder (no local storage), layer
-# docker-compose.alloy.yml instead.
+# docker-compose.alloy.yaml instead.
 #
 # Any data directory can be moved with its own *_DATA_DIR env var
 # (see .env.production.template). All state is bind-mounted so backups
 # are file-level.
 
 # YAML anchors are file-local — overlays must redeclare. See
-# docker-compose.yml header for context (logs caused 506 GB outage).
+# docker-compose.yaml header for context (logs caused 506 GB outage).
 x-logging: &default-logging
   driver: json-file
   options:
@@ -129,16 +129,16 @@ services:
     restart: unless-stopped
     logging: *default-logging
     command:
-      - --config.file=/etc/prometheus/prometheus.yml
+      - --config.file=/etc/prometheus/prometheus.yaml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
       - --web.enable-otlp-receiver
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./alerts.rules.yml:/etc/prometheus/alerts.rules.yml:ro
-      # Referenced from prometheus.yml `rule_files`; without this mount
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./alerts.rules.yaml:/etc/prometheus/alerts.rules.yaml:ro
+      # Referenced from prometheus.yaml `rule_files`; without this mount
       # Prometheus fails to start on a missing rule file.
-      - ./recording.rules.yml:/etc/prometheus/recording.rules.yml:ro
+      - ./recording.rules.yaml:/etc/prometheus/recording.rules.yaml:ro
       - ${PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
@@ -156,9 +156,9 @@ services:
     container_name: loki
     restart: unless-stopped
     logging: *default-logging
-    command: -config.file=/etc/loki/loki-config.yml
+    command: -config.file=/etc/loki/loki-config.yaml
     volumes:
-      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
       - ${LOKI_DATA_DIR:-./data/loki}:/loki
     ports:
       - "${LOKI_PORT:-3100}:3100"
@@ -176,9 +176,9 @@ services:
     container_name: tempo
     restart: unless-stopped
     logging: *default-logging
-    command: ["-config.file=/etc/tempo/tempo-config.yml"]
+    command: ["-config.file=/etc/tempo/tempo-config.yaml"]
     volumes:
-      - ./tempo-config.yml:/etc/tempo/tempo-config.yml:ro
+      - ./tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
       - ${TEMPO_DATA_DIR:-./data/tempo}:/var/tempo
     ports:
       - "${TEMPO_PORT:-3200}:3200"

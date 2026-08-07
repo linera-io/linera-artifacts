@@ -22,18 +22,18 @@ docker compose logs -f proxy
 docker compose logs -f                    # all services
 
 # Stop everything (no data loss)
-docker compose -f docker-compose.yml \
-               -f docker-compose.alloy.yml \
+docker compose -f docker-compose.yaml \
+               -f docker-compose.alloy.yaml \
                down
 
 # Bring it back up — same overlay set you used originally
-docker compose -f docker-compose.yml \
-               -f docker-compose.alloy.yml \
+docker compose -f docker-compose.yaml \
+               -f docker-compose.alloy.yaml \
                up -d
 ```
 
 If you used `--with-local-monitoring` at deploy time, also append
-`-f docker-compose.local-monitoring.yml` to every compose command.
+`-f docker-compose.local-monitoring.yaml` to every compose command.
 Both flags? Both files.
 
 ## Pulling a new linera image
@@ -87,12 +87,12 @@ with the **new** one. State is bind-mounted so nothing is lost:
 
 ```bash
 # Was: --with-alloy
-docker compose -f docker-compose.yml -f docker-compose.alloy.yml down
+docker compose -f docker-compose.yaml -f docker-compose.alloy.yaml down
 
 # Now: --with-alloy AND --with-local-monitoring
-docker compose -f docker-compose.yml \
-               -f docker-compose.alloy.yml \
-               -f docker-compose.local-monitoring.yml \
+docker compose -f docker-compose.yaml \
+               -f docker-compose.alloy.yaml \
+               -f docker-compose.local-monitoring.yaml \
                up -d
 ```
 
@@ -117,8 +117,8 @@ separately, encrypted, off-host.
 
 ```bash
 cd ~/linera-artifacts/docker
-docker compose -f docker-compose.yml \
-               -f docker-compose.alloy.yml \
+docker compose -f docker-compose.yaml \
+               -f docker-compose.alloy.yaml \
                down -v                    # -v wipes named volumes too
 sudo rm -rf data/                         # wipes Scylla / Caddy data
 # server.json + .env are NOT deleted — remove manually if rotating keys.

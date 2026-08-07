@@ -3,10 +3,10 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - /etc/prometheus/alerts.rules.yml
+  - /etc/prometheus/alerts.rules.yaml
   # Backs docker/dashboards/performance.json. Without this the Execution,
   # Request and Storage latency panels have nothing to read.
-  - /etc/prometheus/recording.rules.yml
+  - /etc/prometheus/recording.rules.yaml
 
 # Job names and the `shard` label match alloy-config.river exactly, so the
 # dashboards work whichever of the two scrape paths you run. `shard` is not

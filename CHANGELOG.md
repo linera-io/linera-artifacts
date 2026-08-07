@@ -24,6 +24,28 @@ Release channels:
 Initial public release. This section will be dated and versioned on
 the first tag.
 
+### Changed
+
+- Every YAML file now uses the `.yaml` extension. `.yaml` is the extension
+  registered as preferred in RFC 9512 and recommended by the YAML project
+  since 2006; `.yml` is a DOS-era three-character relic. More concretely,
+  RFC 9512 §3.3 names mixing both extensions in one place as the actual
+  interoperability hazard, and this repo was mixing them 64 to 15.
+
+  If you pass compose files explicitly with `-f`, update the paths:
+  `docker-compose.yml` → `docker-compose.yaml`, and likewise for the
+  `alloy` and `local-monitoring` overlays.
+
+  `artifacthub-repo.yml` is deliberately unchanged in all three charts:
+  Artifact Hub specifies that exact filename, and `.yaml` is not documented
+  as accepted.
+
+  `linera-validator` 0.1.7 → 0.1.8 and `linera-validator-stack` 0.1.9 →
+  0.1.10 come along for the ride. The only in-chart change is one
+  `{{/* … */}}` comment that named a renamed file, so rendered output is
+  byte-identical; the bump is what `check-version-increment` requires of
+  any touched chart, not a behaviour change.
+
 ### Added
 
 - Helm chart `linera-validator` — core validator (shards + proxies).
