@@ -22,10 +22,10 @@
 # new deployments. See docs/DOCKER-COMPOSE.md for the full reference.
 #
 # Optional overlays (layered with `-f`):
-#   docker-compose.alloy.yml            → Grafana Alloy pushing
+#   docker-compose.alloy.yaml            → Grafana Alloy pushing
 #                                         metrics/logs/traces to a
 #                                         remote backend
-#   docker-compose.local-monitoring.yml → Prometheus + Grafana +
+#   docker-compose.local-monitoring.yaml → Prometheus + Grafana +
 #                                         Loki + Tempo running on
 #                                         the same host
 # =============================================================================

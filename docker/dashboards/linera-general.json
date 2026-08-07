@@ -1005,7 +1005,7 @@
     {
       "datasource": {
         "type": "loki",
-        "uid": "P8E80F9AEF21F6940"
+        "uid": "loki"
       },
       "description": "Shard and proxy panics",
       "fieldConfig": {
@@ -1058,7 +1058,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "loki"
           },
           "editorMode": "builder",
           "expr": "{service=~\"shard-.*\"} |= `panic`",
@@ -1068,7 +1068,7 @@
         {
           "datasource": {
             "type": "loki",
-            "uid": "P8E80F9AEF21F6940"
+            "uid": "loki"
           },
           "editorMode": "builder",
           "expr": "{service=\"proxy\"} |= `panic`",

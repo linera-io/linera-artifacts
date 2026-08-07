@@ -51,7 +51,7 @@ Options:
 --image-tag TAG     Override the linera image tag (default: testnet_conway_release).
 --linera-image REF  Override the full image reference.
 --xfs-path PATH     Bind-mount this XFS dir for ScyllaDB data.
---num-shards N      Number of shards (must match docker-compose.yml services).
+--num-shards N      Number of shards (must match docker-compose.yaml services).
 --dry-run           Print what would happen, change nothing.
 ```
 
