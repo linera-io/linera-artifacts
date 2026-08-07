@@ -1,0 +1,40 @@
+services:
+  # Remote Scylla is used instead.
+  scylla:
+    profiles:
+      - local-scylla
+
+  scylla-setup:
+    profiles:
+      - local-scylla
+
+  shard-init:
+    depends_on: !reset {}
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
+  proxy:
+    depends_on: !override
+      shard-init:
+        condition: service_completed_successfully
+        required: true
+
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
+  shard-0:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
+  shard-1:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
+  shard-2:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
+  shard-3:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST}"
+
