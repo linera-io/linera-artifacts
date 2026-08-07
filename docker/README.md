@@ -1,26 +1,28 @@
 # linera-validator — docker compose
 
-Production single-host validator stack: Caddy (TLS) → linera-proxy →
-N linera-server shards → ScyllaDB, with Watchtower for auto-updates
-and a one-shot `scylla-setup` container that tunes host sysctls.
+By default, this directory deploys a production single-host validator stack: Caddy (TLS) → linera-proxy → N linera-server shards → ScyllaDB, with Watchtower for auto-updates and a one-shot `scylla-setup` container for host tuning.
 
-For full operator docs see <https://docs.infra.linera.net/>:
+An optional `docker-compose.remote-scylla.yaml` overlay allows ScyllaDB to run on a separate host while keeping the validator services in the main stack.
 
-- [Quickstart](https://docs.infra.linera.net/QUICKSTART/)
-- [Hardware requirements](https://docs.infra.linera.net/HARDWARE/)
-- [Docker Compose reference](https://docs.infra.linera.net/DOCKER-COMPOSE/)
-- [Post-setup operations](https://docs.infra.linera.net/POST-SETUP/)
+For full operator docs see https://docs.infra.linera.net/:
+
+* [Quickstart](https://docs.infra.linera.net/QUICKSTART/)
+* [Hardware requirements](https://docs.infra.linera.net/HARDWARE/)
+* [Docker Compose reference](https://docs.infra.linera.net/DOCKER-COMPOSE/)
+* [Post-setup operations](https://docs.infra.linera.net/POST-SETUP/)
 
 ## Files
 
-| File                                  | Purpose                                                   |
-|---------------------------------------|-----------------------------------------------------------|
-| `docker-compose.yml`                  | Core: web, scylla, proxy, 4 shards, watchtower. Required. |
-| `docker-compose.alloy.yml`            | Optional overlay: push metrics/logs/traces to a remote Prometheus/Loki/Tempo. |
-| `docker-compose.local-monitoring.yml` | Optional overlay: local Prometheus + Grafana on the host. |
-| `.env.production.template`            | Reference `.env`. Copy to `.env` (or use `scripts/deploy-validator.sh`). |
-| `dashboards/`                         | Grafana dashboards auto-loaded by the local-monitoring overlay. |
-| `Caddyfile`                           | Caddy config (TLS + reverse-proxy to linera-proxy).       |
+| File                                   | Purpose                                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `docker-compose.yaml`                  | Core stack: web, ScyllaDB, proxy, 4 shards, and Watchtower. Required.                   |
+| `docker-compose.remote-scylla.yaml`    | Optional overlay: use an external ScyllaDB host instead of the local ScyllaDB services. |
+| `docker-compose.alloy.yaml`            | Optional overlay for remote Prometheus/Loki/Tempo telemetry.                            |
+| `docker-compose.local-monitoring.yaml` | Optional local Prometheus + Grafana stack.                                              |
+| `.env.production.template`             | Reference environment configuration.                                                    |
+| `dashboards/`                          | Grafana dashboards for the monitoring stack.                                            |
+| `recording.rules.yaml`                 | Prometheus recording rules used by the performance dashboard.                           |
+| `Caddyfile`                            | TLS and reverse-proxy configuration.                                                    |
 
 ## Quickstart
 
@@ -29,24 +31,34 @@ For full operator docs see <https://docs.infra.linera.net/>:
 ./scripts/deploy-validator.sh validator.example.com admin@example.com
 ```
 
-That populates `.env` from the template, downloads the network's
-`genesis.json`, generates your `server.json`, and brings the stack up.
-For manual / advanced setup (custom genesis, larger hosts, opt-in
-monitoring overlays) see the
-[Docker Compose reference](https://docs.infra.linera.net/DOCKER-COMPOSE/).
+The script prepares `.env`, downloads `genesis.json`, generates `server.json`, and starts the stack.
+
+For manual or advanced deployments, including remote ScyllaDB and monitoring overlays, see the [Docker Compose reference](https://docs.infra.linera.net/DOCKER-COMPOSE/).
+
+## Remote ScyllaDB
+
+To run ScyllaDB on a separate host, use the `docker-compose.remote-scylla.yaml` overlay and set `SCYLLA_HOST` to an address reachable from the validator host:
+
+```bash
+SCYLLA_HOST=10.77.77.1 \
+docker compose \
+  -f docker-compose.yaml \
+  -f docker-compose.remote-scylla.yaml \
+  up -d
+```
+
+The overlay disables the local `scylla` and `scylla-setup` services, removes Compose dependencies on the local database, and maps the existing `scylla` hostname used by the proxy and shards to the remote host.
+
+The remote ScyllaDB endpoint should be exposed only over a trusted private network, such as a private VLAN or WireGuard tunnel.
 
 ## Tuning
 
-Every limit, port, image tag, and ScyllaDB knob is configurable via
-`.env`. Key variables:
+Service limits, ports, image tags, and ScyllaDB settings are configured through `.env`.
 
-- `LIMIT_CPUS_*` / `LIMIT_MEM_*` — cgroup CPU / memory budgets per
-  service. Defaults target a 16-core / 64 GB host.
-- `LIMIT_CPUS_SCYLLA` — also drives ScyllaDB's `--smp`. Increasing it
-  on existing data is fine; reducing it requires a full data wipe.
-- `LIMIT_MEM_SCYLLA` — cgroup memory limit for ScyllaDB. ScyllaDB
-  reads this directly via cgroup and reserves its own headroom (we do
-  not pass `--memory`). To grow ScyllaDB just raise this number.
+Important variables include:
 
-See [`.env.production.template`](.env.production.template) for the
-full list with inline comments.
+* `LIMIT_CPUS_*` / `LIMIT_MEM_*` — CPU and memory limits per service.
+* `LIMIT_CPUS_SCYLLA` — also controls ScyllaDB `--smp`.
+* `LIMIT_MEM_SCYLLA` — ScyllaDB container memory limit.
+
+See [`.env.production.template`](.env.production.template) for the complete configuration and inline documentation.

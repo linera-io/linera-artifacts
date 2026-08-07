@@ -11,7 +11,7 @@ services:
   shard-init:
     depends_on: !reset {}
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
   proxy:
     depends_on: !override
@@ -20,21 +20,21 @@ services:
         required: true
 
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
   shard-0:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
   shard-1:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
   shard-2:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
   shard-3:
     extra_hosts:
-      - "scylla=${SCYLLA_HOST:-10.77.77.1}"
+      - "scylla=${SCYLLA_HOST}"
 
