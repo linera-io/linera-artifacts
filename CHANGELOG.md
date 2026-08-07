@@ -40,6 +40,12 @@ the first tag.
   Artifact Hub specifies that exact filename, and `.yaml` is not documented
   as accepted.
 
+  `linera-validator` 0.1.7 → 0.1.8 and `linera-validator-stack` 0.1.9 →
+  0.1.10 come along for the ride. The only in-chart change is one
+  `{{/* … */}}` comment that named a renamed file, so rendered output is
+  byte-identical; the bump is what `check-version-increment` requires of
+  any touched chart, not a behaviour change.
+
 ### Added
 
 - Helm chart `linera-validator` — core validator (shards + proxies).
