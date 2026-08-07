@@ -22,19 +22,23 @@ bug reports.
 3. Run the local checks listed below.
 4. Open a pull request with a clear description of what changed and why.
 
-This repository enforces a linear commit history. Use `git rebase` rather
-than merge commits, and feel free to amend / force-push your PR branch
-while it's under review.
+We prefer a linear commit history. Use `git rebase` rather than merge
+commits, and feel free to amend / force-push your PR branch while it's
+under review.
 
 Only commits in a PR that has been reviewed and approved should land on
 `main`.
 
-## Signed commits
+**Contributing from a fork?** Your first CI run needs a maintainer to
+approve it, so a brand-new PR shows *no checks at all* rather than a
+pending or failing one. That is normal and not something you did wrong —
+it just means nobody has clicked approve yet. Feel free to say so on the
+PR if it has been sitting a while.
 
-**Every commit in a PR must be signed.** `main` is protected and rejects
-unsigned commits, so an otherwise-perfect PR shows as *blocked* with no
-merge button and no obvious explanation. Set this up before your first
-commit — it is much less annoying than re-signing history afterwards.
+## Signed commits (optional)
+
+Signing is welcome but **not required** — an unsigned PR will merge fine.
+If you want your commits to show as *Verified*, here is the setup.
 
 Check what GitHub thinks of a commit with:
 
@@ -59,9 +63,8 @@ key](https://docs.github.com/en/authentication/managing-commit-signature-verific
 and [adding a GPG
 key](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
 
-Already pushed unsigned commits? Sign them in place and force-push — the
-linear-history rule above means force-pushing your own PR branch is
-expected:
+Want to sign commits you already pushed? Sign them in place and force-push.
+Force-pushing your own PR branch is expected here:
 
 ```bash
 # a single commit
