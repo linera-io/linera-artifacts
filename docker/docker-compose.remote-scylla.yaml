@@ -2,11 +2,13 @@ services:
   # Compose cannot delete a service in an override, so the local database is
   # disabled by moving it behind a profile that is never enabled.
   #
-  # Do NOT run this overlay with `--profile local-scylla` expecting the local
-  # database back: you would get a broken hybrid. The health-check waits below
-  # have been removed, and every container still resolves `scylla` to
-  # $SCYLLA_HOST via /etc/hosts, which wins over Docker's embedded DNS. Omit
-  # this overlay entirely to use the local database.
+  # Do NOT run with `--profile local-scylla` expecting the local database back:
+  # you would get a broken hybrid. The health-check waits below have been
+  # removed, and every container still resolves `scylla` to $SCYLLA_HOST via
+  # /etc/hosts, which wins over Docker's embedded DNS.
+  #
+  # To use the local database, just leave this file out of the command:
+  #   docker compose -f docker-compose.yaml up -d
   scylla:
     profiles:
       - local-scylla

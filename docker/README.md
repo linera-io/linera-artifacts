@@ -50,10 +50,19 @@ docker compose \
 The overlay disables the local `scylla` and `scylla-setup` services, removes Compose dependencies on the local database, and maps the existing `scylla` hostname used by the proxy and shards to the remote host.
 
 `SCYLLA_HOST` is required: leaving it unset fails immediately rather than
-starting a stack that cannot reach its database. Do not add
-`--profile local-scylla` to bring the local database back — that combination
-starts ScyllaDB but leaves the health-check waits removed and still resolves
-`scylla` to `$SCYLLA_HOST`. To use the local database, omit this overlay.
+starting a stack that cannot reach its database.
+
+To go back to the local database, drop the second `-f` and run the stack the
+normal way:
+
+```bash
+docker compose -f docker-compose.yaml up -d
+```
+
+Do **not** try to get the local database back by adding
+`--profile local-scylla` to the command above. That starts ScyllaDB, but the
+shards no longer wait for it to be healthy and every container still resolves
+`scylla` to `$SCYLLA_HOST`, so they would talk to the remote host anyway.
 
 The remote ScyllaDB endpoint should be exposed only over a trusted private network, such as a private VLAN or WireGuard tunnel.
 
