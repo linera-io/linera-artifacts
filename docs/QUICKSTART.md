@@ -107,8 +107,8 @@ kubectl --namespace linera create secret generic validator-config \
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator-stack \
   --namespace linera \
-  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
-  --set linera-validator.image.tag=testnet_conway_release \
+  --set linera-validator.validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set linera-validator.validatorImage.tag=testnet_conway_release \
   --set linera-validator.clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
   --set linera-validator.clientImage.tag=testnet_conway_release \
   --set linera-validator.validator.existingSecret=validator-config
@@ -136,8 +136,8 @@ Skip the umbrella when you already manage ScyllaDB separately:
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
-  --set image.tag=testnet_conway_release \
+  --set validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set validatorImage.tag=testnet_conway_release \
   --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
   --set clientImage.tag=testnet_conway_release \
   --set storage.uri='scylladb:tcp:my-scylla.svc:9042' \
