@@ -4,7 +4,7 @@
 # Use this as a starting point for any production validator install,
 # regardless of cloud provider.
 
-image:
+validatorImage:
   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator
   tag: testnet_conway_release
 # The `linera` CLI lives in a separate image since the upstream split;
