@@ -35,8 +35,10 @@ blocks.
 helm install validator-1-exporter \
   oci://ghcr.io/linera-io/charts/linera-block-exporter \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-exporter \
   --set image.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set storage.uri='scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042' \
   --set destinations[0].kind=Indexer \
   --set destinations[0].endpoint=indexer.example.com \
@@ -74,6 +76,9 @@ each TOML.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| clientImage.digest | string | `""` | Image digest. Takes precedence over tag when set. |
+| clientImage.repository | string | `""` | Image repository for the `linera` CLI. Empty falls back to `image`. |
+| clientImage.tag | string | `""` | Image tag. Defaults to image.tag, then .Chart.appVersion. |
 | committeeDestination | bool | `true` |  |
 | commonLabels | object | `{}` |  |
 | destinations[0] | object | `{"endpoint":"","kind":"Indexer","port":8081,"tls":"ClearText"}` | One or more indexer endpoints to push blocks to. |
@@ -109,7 +114,7 @@ each TOML.
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | image.pullSecrets | list | `[]` |  |
-| image.repository | string | `""` | Image with the linera + linera-exporter binaries (REQUIRED). The same image used by linera-validator works. |
+| image.repository | string | `""` | Image with the linera-exporter binary (REQUIRED). Since the upstream image split this is `linera-exporter`. It is NOT the linera-validator image, which carries only linera-server and linera-proxy. |
 | image.tag | string | `""` | Image tag. Defaults to .Chart.appVersion when empty. |
 | limits.auxiliaryCacheSizeMb | int | `1024` |  |
 | limits.blobCacheItemsCapacity | int | `8192` |  |
