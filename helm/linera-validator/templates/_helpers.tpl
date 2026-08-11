@@ -98,12 +98,12 @@ ServiceAccount name to use.
 Image reference. `image.digest` (sha256:...) pins content-addressed and takes
 precedence over `image.tag` — a digest reference can never move, unlike tags.
 */}}
-{{- define "linera-validator.image" -}}
-{{- $repo := required "image.repository is required (the linera-validator image: linera-server + linera-proxy)" .Values.image.repository -}}
-{{- if .Values.image.digest -}}
-{{- printf "%s@%s" $repo .Values.image.digest -}}
+{{- define "linera-validator.validatorImage" -}}
+{{- $repo := required "validatorImage.repository is required (linera-server + linera-proxy)" .Values.validatorImage.repository -}}
+{{- if .Values.validatorImage.digest -}}
+{{- printf "%s@%s" $repo .Values.validatorImage.digest -}}
 {{- else -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- $tag := .Values.validatorImage.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" $repo $tag -}}
 {{- end -}}
 {{- end }}
@@ -126,11 +126,11 @@ split images.
 {{- if .Values.clientImage.digest -}}
 {{- printf "%s@%s" .Values.clientImage.repository .Values.clientImage.digest -}}
 {{- else -}}
-{{- $tag := .Values.clientImage.tag | default .Values.image.tag | default .Chart.AppVersion -}}
+{{- $tag := .Values.clientImage.tag | default .Values.validatorImage.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" .Values.clientImage.repository $tag -}}
 {{- end -}}
 {{- else -}}
-{{- include "linera-validator.image" . -}}
+{{- include "linera-validator.validatorImage" . -}}
 {{- end -}}
 {{- end }}
 
