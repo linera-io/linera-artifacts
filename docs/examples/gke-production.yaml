@@ -1,7 +1,7 @@
 # GKE production. Workload Identity for IAM, PD-SSD storage, Gateway
 # API for client traffic with cert-manager + external-dns annotations.
 
-image:
+validatorImage:
   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator
   tag: testnet_conway_release
 # The `linera` CLI lives in a separate image since the upstream split;
