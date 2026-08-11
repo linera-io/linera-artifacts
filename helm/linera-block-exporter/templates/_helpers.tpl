@@ -66,6 +66,23 @@ Image reference.
 {{- end }}
 
 {{/*
+Image for the storage-check init container, which runs the `linera` CLI.
+Falls back to `image` when clientImage.repository is unset.
+*/}}
+{{- define "linera-block-exporter.clientImage" -}}
+{{- if .Values.clientImage.repository -}}
+{{- if .Values.clientImage.digest -}}
+{{- printf "%s@%s" .Values.clientImage.repository .Values.clientImage.digest -}}
+{{- else -}}
+{{- $tag := .Values.clientImage.tag | default .Values.image.tag | default .Chart.AppVersion -}}
+{{- printf "%s:%s" .Values.clientImage.repository $tag -}}
+{{- end -}}
+{{- else -}}
+{{- include "linera-block-exporter.image" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 ConfigMap name (one ConfigMap with N TOML files, one per replica).
 */}}
 {{- define "linera-block-exporter.configMapName" -}}
