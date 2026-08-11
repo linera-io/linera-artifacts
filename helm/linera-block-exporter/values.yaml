@@ -13,7 +13,7 @@ fullnameOverride: ""
 nameOverride: ""
 commonLabels: {}
 
-image:
+exporterImage:
   # -- Image with the linera-exporter binary (REQUIRED).
   # Since the upstream image split this is `linera-exporter`. It is NOT the
   # linera-validator image, which carries only linera-server and linera-proxy.
