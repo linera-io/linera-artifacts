@@ -28,8 +28,10 @@ kubectl --namespace linera create secret generic validator-1-config \
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set image.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.existingSecret=validator-1-config
 ```
 
@@ -46,8 +48,10 @@ helm install validator-1 \
 ```bash
 helm lint .
 helm template demo . \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set image.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.serverConfigData='{}' \
   --set validator.genesisConfigData='{}'
 ```
