@@ -99,11 +99,38 @@ Image reference. `image.digest` (sha256:...) pins content-addressed and takes
 precedence over `image.tag` — a digest reference can never move, unlike tags.
 */}}
 {{- define "linera-validator.image" -}}
+{{- $repo := required "image.repository is required (the linera-validator image: linera-server + linera-proxy)" .Values.image.repository -}}
 {{- if .Values.image.digest -}}
-{{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
+{{- printf "%s@%s" $repo .Values.image.digest -}}
 {{- else -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
-{{- printf "%s:%s" .Values.image.repository $tag -}}
+{{- printf "%s:%s" $repo $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Image for the containers that run the `linera` CLI rather than the server or
+proxy — the storage-wait / storage-init init containers.
+
+Upstream split the single image in two: linera-validator carries linera-server
+and linera-proxy, linera-client carries `linera`. The validator image has no
+`linera` binary at all, so pointing these init containers at it makes every
+proxy and shard fail to start — they gate startup.
+
+Falls back to `image` only when `clientImage.repository` is unset, so charts
+pinned to a pre-split combined image keep working; set clientImage to use the
+split images.
+*/}}
+{{- define "linera-validator.clientImage" -}}
+{{- if .Values.clientImage.repository -}}
+{{- if .Values.clientImage.digest -}}
+{{- printf "%s@%s" .Values.clientImage.repository .Values.clientImage.digest -}}
+{{- else -}}
+{{- $tag := .Values.clientImage.tag | default .Values.image.tag | default .Chart.AppVersion -}}
+{{- printf "%s:%s" .Values.clientImage.repository $tag -}}
+{{- end -}}
+{{- else -}}
+{{- include "linera-validator.image" . -}}
 {{- end -}}
 {{- end }}
 
