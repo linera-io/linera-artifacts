@@ -5,8 +5,8 @@ templates:
 release:
   name: rel
 set:
-  image.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
-  image.tag: testnet_conway_release
+  validatorImage.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  validatorImage.tag: testnet_conway_release
 tests:
   - it: default (useComponentPrefix false) renders clean component names
     asserts:
