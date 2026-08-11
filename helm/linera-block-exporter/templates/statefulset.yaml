@@ -79,7 +79,7 @@ spec:
       initContainers:
         {{- if .Values.exporter.storageInitCheck.enabled }}
         - name: storage-check
-          image: {{ include "linera-block-exporter.image" . }}
+          image: {{ include "linera-block-exporter.clientImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.exporter.securityContext }}
           securityContext:
