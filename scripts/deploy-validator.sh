@@ -36,7 +36,8 @@
 #
 # Environment overrides (lowest precedence):
 #   GENESIS_URL, GENESIS_BUCKET, GENESIS_PATH_PREFIX, ACME_EMAIL,
-#   LINERA_IMAGE, IMAGE_TAG, NUM_SHARDS, SCYLLA_XFS_PATH
+#   LINERA_VALIDATOR_IMAGE, LINERA_CLIENT_IMAGE, IMAGE_TAG, NUM_SHARDS,
+#   SCYLLA_XFS_PATH
 
 set -euo pipefail
 
@@ -47,7 +48,7 @@ readonly REPO_ROOT
 readonly COMPOSE_DIR="${REPO_ROOT}/docker"
 
 readonly DEFAULT_REGISTRY="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
-readonly DEFAULT_IMAGE_NAME="linera"
+readonly DEFAULT_IMAGE_NAME="linera-validator"
 readonly DEFAULT_IMAGE_TAG="testnet_conway_release"
 readonly DEFAULT_GENESIS_BUCKET="https://storage.googleapis.com/linera-io-dev-public"
 readonly DEFAULT_NETWORK="testnet-conway"
@@ -287,7 +288,8 @@ build_env() {
     set_or_replace VALIDATOR_KEY "$public_key"
     set_or_replace VALIDATOR_NAME "$host"
     set_or_replace HOSTNAME "$host"
-    set_or_replace LINERA_IMAGE "$image"
+    set_or_replace LINERA_VALIDATOR_IMAGE "$validator_image"
+    set_or_replace LINERA_CLIENT_IMAGE "$client_image"
     set_or_replace NUM_SHARDS "$num_shards"
 
     # Refresh the deployment metadata block.
@@ -306,7 +308,18 @@ main() {
     local host="" email=""
     local skip_genesis=0 force_genesis=0
     local image_tag="${IMAGE_TAG:-$DEFAULT_IMAGE_TAG}"
-    local linera_image="${LINERA_IMAGE:-}"
+    # Two images since the upstream split: linera-validator runs
+    # linera-server / linera-proxy, linera-client runs the `linera` CLI
+    # that shard-init invokes.
+    local validator_image="${LINERA_VALIDATOR_IMAGE:-}"
+    local client_image="${LINERA_CLIENT_IMAGE:-}"
+    if [ -n "${LINERA_IMAGE:-}" ]; then
+        echo "ERROR: LINERA_IMAGE is set but is no longer used." >&2
+        echo "  Use LINERA_VALIDATOR_IMAGE and LINERA_CLIENT_IMAGE instead." >&2
+        exit 1
+    fi
+    [ -n "$validator_image" ] || validator_image="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:${image_tag}"
+    [ -n "$client_image" ] || client_image="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client:${image_tag}"
     local num_shards="${NUM_SHARDS:-$DEFAULT_NUM_SHARDS}"
     local xfs_path="${SCYLLA_XFS_PATH:-}"
     local with_alloy="${WITH_ALLOY:-0}"
