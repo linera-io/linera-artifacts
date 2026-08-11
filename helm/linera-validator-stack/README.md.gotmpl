@@ -45,8 +45,10 @@ already exist in the cluster:
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator-stack \
   --namespace linera --create-namespace \
-  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set linera-validator.image.tag=testnet_conway_release \
+  --set linera-validator.clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set linera-validator.clientImage.tag=testnet_conway_release \
   --set linera-validator.validator.existingSecret=validator-config
 ```
 
