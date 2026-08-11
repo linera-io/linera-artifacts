@@ -2,7 +2,7 @@
 # Pairs with the docker-compose stack in spirit: 1 shard, 1 proxy, no
 # resource requests, in-memory storage.
 
-image:
+validatorImage:
   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator
   tag: testnet_conway_release
 # The `linera` CLI lives in a separate image since the upstream split;
