@@ -163,7 +163,7 @@ deployments:
           # Short fullname so service hostnames stay readable and match
           # the validator-config.toml the bootstrap function generates.
           fullnameOverride: validator
-          image:
+          validatorImage:
             repository: ${LINERA_IMAGE}
           clientImage:
             repository: ${LINERA_CLIENT_IMAGE:-${LINERA_IMAGE}}
