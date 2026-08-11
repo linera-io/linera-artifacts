@@ -72,7 +72,7 @@ spec:
       {{- end }}
       initContainers:
         - name: storage-init
-          image: {{ include "linera-validator.image" . }}
+          image: {{ include "linera-validator.clientImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.shards.securityContext }}
           securityContext:
