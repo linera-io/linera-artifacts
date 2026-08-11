@@ -32,8 +32,10 @@ kubectl --namespace linera create secret generic validator-1-config \
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set image.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.existingSecret=validator-1-config
 ```
 
@@ -50,8 +52,10 @@ helm install validator-1 \
 ```bash
 helm lint .
 helm template demo . \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set image.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.serverConfigData='{}' \
   --set validator.genesisConfigData='{}'
 ```
@@ -76,6 +80,9 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| clientImage.digest | string | `""` | Image digest. Takes precedence over tag when set. |
+| clientImage.repository | string | `""` | Image repository for the `linera` CLI. Empty falls back to `image`. |
+| clientImage.tag | string | `""` | Image tag. Defaults to image.tag, then .Chart.appVersion. |
 | commonLabels | object | `{}` | Extra labels applied to every resource produced by the chart. |
 | dashboards.enabled | bool | `false` | Emit ConfigMaps labelled for the Grafana sidecar to pick up (https://github.com/grafana/helm-charts/tree/main/charts/grafana). OPT-IN: requires your Grafana install to have dashboard sidecar enabled. Most operators ship dashboards via their own GitOps, this stays out of the way by default. |
 | dashboards.label | string | `"grafana_dashboard"` | Label the Grafana sidecar searches for. Most installs use `grafana_dashboard=1`; adjust if yours differs. |
@@ -91,7 +98,7 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | image.digest | string | `""` | Image digest (e.g. "sha256:..."). Takes precedence over tag when set — use for immutable, content-addressed pins. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | image.pullSecrets | list | `[]` | Pull secrets for private registries. |
-| image.repository | string | `""` | Image repository for the linera binaries (REQUIRED). |
+| image.repository | string | `""` | Image repository for linera-server / linera-proxy (REQUIRED). Since the upstream image split this is `linera-validator`, NOT `linera`. |
 | image.tag | string | `""` | Image tag. Defaults to .Chart.appVersion if empty. |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |
