@@ -34,7 +34,7 @@ commonLabels: {}
 # gRPC mesh unless the minted hostnames are changed to match.
 useComponentPrefix: false
 
-image:
+validatorImage:
   # -- Image repository for linera-server / linera-proxy (REQUIRED).
   # Since the upstream image split this is `linera-validator`, NOT `linera`.
   repository: ""
