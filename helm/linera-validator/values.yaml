@@ -35,7 +35,8 @@ commonLabels: {}
 useComponentPrefix: false
 
 image:
-  # -- Image repository for the linera binaries (REQUIRED).
+  # -- Image repository for linera-server / linera-proxy (REQUIRED).
+  # Since the upstream image split this is `linera-validator`, NOT `linera`.
   repository: ""
   # -- Image tag. Defaults to .Chart.appVersion if empty.
   tag: ""
@@ -47,6 +48,22 @@ image:
   # -- Pull secrets for private registries.
   pullSecrets: []
   # - name: my-registry-secret
+
+# Image for the containers that run the `linera` CLI (the storage-wait /
+# storage-init init containers). Since the upstream split that binary lives in
+# `linera-client`, not in the validator image.
+#
+# Leave repository empty to fall back to `image` above — correct only for a
+# pre-split combined image. For testnet-conway set it explicitly:
+#   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client
+#   tag: testnet_conway_release
+clientImage:
+  # -- Image repository for the `linera` CLI. Empty falls back to `image`.
+  repository: ""
+  # -- Image tag. Defaults to image.tag, then .Chart.appVersion.
+  tag: ""
+  # -- Image digest. Takes precedence over tag when set.
+  digest: ""
 
 # =============================================================================
 # Logging & tracing
