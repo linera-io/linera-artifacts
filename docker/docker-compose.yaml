@@ -174,15 +174,31 @@ services:
   # ---------------------------------------------------------------------------
   shard-init:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_CLIENT_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client:testnet_conway_release}
     container_name: shard-init
     logging: *default-logging
     environment:
       - SCYLLA_PORT=${SCYLLA_PORT:-9042}
+      # Passed in only so the guard below can detect a stale .env.
+      - LINERA_IMAGE=${LINERA_IMAGE:-}
     entrypoint: ["sh", "-c"]
     command:
       - |
         set -eu
+        # The single `linera` image was split upstream into linera-validator
+        # (linera-server, linera-proxy) and linera-client (the `linera` CLI), so
+        # LINERA_IMAGE no longer selects anything. Left set in an old .env it
+        # would be silently ignored and the stack would run the defaults instead
+        # of the operator's pinned image. Fail loudly instead: every other
+        # service waits on this one completing, so nothing starts on a
+        # half-migrated config.
+        if [ -n "$$LINERA_IMAGE" ]; then
+          echo "ERROR: LINERA_IMAGE is set but is no longer used." >&2
+          echo "  The image was split. Replace it in your .env with:" >&2
+          echo "    LINERA_VALIDATOR_IMAGE=<registry>/linera-validator:testnet_conway_release" >&2
+          echo "    LINERA_CLIENT_IMAGE=<registry>/linera-client:testnet_conway_release" >&2
+          exit 1
+        fi
         while true; do
           status=0
           /linera storage check-existence --storage scylladb:tcp:scylla:$$SCYLLA_PORT || status=$$?
@@ -219,7 +235,7 @@ services:
   # ---------------------------------------------------------------------------
   proxy:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
     container_name: proxy
     restart: unless-stopped
     logging: *default-logging
@@ -297,7 +313,7 @@ services:
   # ---------------------------------------------------------------------------
   shard-0:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
     container_name: docker-shard-1
     hostname: docker-shard-1
     restart: unless-stopped
@@ -367,7 +383,7 @@ services:
 
   shard-1:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
     container_name: docker-shard-2
     hostname: docker-shard-2
     restart: unless-stopped
@@ -437,7 +453,7 @@ services:
 
   shard-2:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
     container_name: docker-shard-3
     hostname: docker-shard-3
     restart: unless-stopped
@@ -507,7 +523,7 @@ services:
 
   shard-3:
     image: >-
-      ${LINERA_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release}
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
     container_name: docker-shard-4
     hostname: docker-shard-4
     restart: unless-stopped

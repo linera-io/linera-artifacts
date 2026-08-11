@@ -1,6 +1,6 @@
 # linera-validator-stack
 
-![Version: 0.1.10](https://img.shields.io/badge/Version-0.1.10-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Umbrella chart that installs everything needed to run a Linera
 validator in one shot: the validator (shards + proxies), an optional
@@ -53,8 +53,10 @@ already exist in the cluster:
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator-stack \
   --namespace linera --create-namespace \
-  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
   --set linera-validator.image.tag=testnet_conway_release \
+  --set linera-validator.clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set linera-validator.clientImage.tag=testnet_conway_release \
   --set linera-validator.validator.existingSecret=validator-config
 ```
 
@@ -73,8 +75,8 @@ helm install validator-1 \
 
 | Repository | Name | Version |
 |------------|------|---------|
-| file://../linera-block-exporter | linera-block-exporter | 0.1.4 |
-| file://../linera-validator | linera-validator | 0.1.8 |
+| file://../linera-block-exporter | linera-block-exporter | 0.2.0 |
+| file://../linera-validator | linera-validator | 0.2.0 |
 
 ## Values
 

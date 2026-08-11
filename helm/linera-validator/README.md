@@ -1,6 +1,6 @@
 # linera-validator
 
-![Version: 0.1.8](https://img.shields.io/badge/Version-0.1.8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Linera validator core: the shards (StatefulSet) and proxies (StatefulSet)
 that together form a single validator on the Linera network.
@@ -32,8 +32,10 @@ kubectl --namespace linera create secret generic validator-1-config \
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
-  --set image.tag=testnet_conway_release \
+  --set validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set validatorImage.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.existingSecret=validator-1-config
 ```
 
@@ -50,8 +52,10 @@ helm install validator-1 \
 ```bash
 helm lint .
 helm template demo . \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
-  --set image.tag=testnet_conway_release \
+  --set validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set validatorImage.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set validator.serverConfigData='{}' \
   --set validator.genesisConfigData='{}'
 ```
@@ -76,6 +80,9 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| clientImage.digest | string | `""` | Image digest. Takes precedence over tag when set. |
+| clientImage.repository | string | `""` | Image repository for the `linera` CLI. Empty falls back to `image`. |
+| clientImage.tag | string | `""` | Image tag. Defaults to image.tag, then .Chart.appVersion. |
 | commonLabels | object | `{}` | Extra labels applied to every resource produced by the chart. |
 | dashboards.enabled | bool | `false` | Emit ConfigMaps labelled for the Grafana sidecar to pick up (https://github.com/grafana/helm-charts/tree/main/charts/grafana). OPT-IN: requires your Grafana install to have dashboard sidecar enabled. Most operators ship dashboards via their own GitOps, this stays out of the way by default. |
 | dashboards.label | string | `"grafana_dashboard"` | Label the Grafana sidecar searches for. Most installs use `grafana_dashboard=1`; adjust if yours differs. |
@@ -88,11 +95,6 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | gateway.envoyClientTrafficPolicy | object | `{"enabled":false,"timeout":{"http":{"idleTimeout":"168h"}}}` | Opt-in ClientTrafficPolicy on the validator Gateway (downstream client↔Envoy side); the only place to set Envoy's HTTP stream-idle timeout (~5min default). enabled:false renders nothing; enabling affects the whole Gateway. timeout passed through 1:1 to spec.timeout (Envoy Gateway validates it); same Go-style durations. |
 | gateway.hostname | string | `""` | Hostname for the validator. external-dns can manage the corresponding DNS record from this annotation. |
 | gateway.tlsSecretName | string | `""` | TLS Secret produced by cert-manager (or any other source). |
-| image.digest | string | `""` | Image digest (e.g. "sha256:..."). Takes precedence over tag when set — use for immutable, content-addressed pins. |
-| image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
-| image.pullSecrets | list | `[]` | Pull secrets for private registries. |
-| image.repository | string | `""` | Image repository for the linera binaries (REQUIRED). |
-| image.tag | string | `""` | Image tag. Defaults to .Chart.appVersion if empty. |
 | ingress.annotations | object | `{}` |  |
 | ingress.className | string | `""` |  |
 | ingress.enabled | bool | `false` | **DEPRECATED / maintenance mode.** Create a Kubernetes Ingress. The Kubernetes project has placed the Ingress API in feature freeze and recommends Gateway API for new deployments — see <https://kubernetes.io/docs/concepts/services-networking/ingress/>. Prefer the `gateway` block below for new installs. This option is kept for operators whose clusters only ship an Ingress controller. |
@@ -188,6 +190,11 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | validator.existingSecret | string | `""` | Use an existing Secret instead of inlining configs above. The Secret must contain two keys: "serverConfig" and "genesisConfig". |
 | validator.genesisConfigData | string | `""` | Genesis config JSON (public). Distributed to every validator in the same network. Inline as a string here, or use existingSecret. |
 | validator.serverConfigData | string | `""` | Server config JSON (PRIVATE — contains the validator signing key). Inline as a string here, or use existingSecret. |
+| validatorImage.digest | string | `""` | Image digest (e.g. "sha256:..."). Takes precedence over tag when set — use for immutable, content-addressed pins. |
+| validatorImage.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
+| validatorImage.pullSecrets | list | `[]` | Pull secrets for private registries. |
+| validatorImage.repository | string | `""` | Image repository for linera-server / linera-proxy (REQUIRED). Since the upstream image split this is `linera-validator`, NOT `linera`. |
+| validatorImage.tag | string | `""` | Image tag. Defaults to .Chart.appVersion if empty. |
 | validatorLabel | string | `""` | Validator label exposed to external monitoring systems. Free-form, e.g. "validator-1" or "us-east-pilot". |
 
 ## License

@@ -1,8 +1,13 @@
 # OVH managed Kubernetes (or any bare-metal cluster). nginx ingress
 # for the proxy, local-path storage class for RocksDB.
 
-image:
-  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+validatorImage:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator
+  tag: testnet_conway_release
+# The `linera` CLI lives in a separate image since the upstream split;
+# the storage-wait / storage-init init containers need it.
+clientImage:
+  repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client
   tag: testnet_conway_release
 
 storage:

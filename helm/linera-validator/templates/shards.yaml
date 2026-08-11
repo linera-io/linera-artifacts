@@ -43,7 +43,7 @@ spec:
     spec:
       serviceAccountName: {{ include "linera-validator.serviceAccountName" . }}
       terminationGracePeriodSeconds: {{ .Values.shards.terminationGracePeriodSeconds }}
-      {{- with .Values.image.pullSecrets }}
+      {{- with .Values.validatorImage.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -72,8 +72,8 @@ spec:
       {{- end }}
       initContainers:
         - name: storage-init
-          image: {{ include "linera-validator.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "linera-validator.clientImage" . }}
+          imagePullPolicy: {{ .Values.validatorImage.pullPolicy }}
           {{- with .Values.shards.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -125,8 +125,8 @@ spec:
             {{- end }}
       containers:
         - name: linera-server
-          image: {{ include "linera-validator.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "linera-validator.validatorImage" . }}
+          imagePullPolicy: {{ .Values.validatorImage.pullPolicy }}
           {{- with .Values.shards.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

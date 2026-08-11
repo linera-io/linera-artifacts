@@ -13,14 +13,28 @@ fullnameOverride: ""
 nameOverride: ""
 commonLabels: {}
 
-image:
-  # -- Image with the linera + linera-exporter binaries (REQUIRED).
-  # The same image used by linera-validator works.
+exporterImage:
+  # -- Image with the linera-exporter binary (REQUIRED).
+  # Since the upstream image split this is `linera-exporter`. It is NOT the
+  # linera-validator image, which carries only linera-server and linera-proxy.
   repository: ""
   # -- Image tag. Defaults to .Chart.appVersion when empty.
   tag: ""
   pullPolicy: IfNotPresent
   pullSecrets: []
+
+
+# Image for the `linera` CLI, used by the storage-check init container. Since
+# the upstream split that binary is in `linera-client`, not in the exporter
+# image. Empty falls back to `image`, which is only correct for a pre-split
+# combined image.
+clientImage:
+  # -- Image repository for the `linera` CLI. Empty falls back to `image`.
+  repository: ""
+  # -- Image tag. Defaults to image.tag, then .Chart.appVersion.
+  tag: ""
+  # -- Image digest. Takes precedence over tag when set.
+  digest: ""
 
 # =============================================================================
 # Validator storage backend (REQUIRED — must match the validator)

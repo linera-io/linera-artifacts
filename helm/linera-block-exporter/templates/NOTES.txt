@@ -15,7 +15,7 @@ the same connection string used by the validator (typically:
 "scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042").
 {{- end }}
 
-{{- if not .Values.image.repository }}
+{{- if not .Values.exporterImage.repository }}
 
 WARNING: image.repository is empty. Set it to an image with the
 linera + linera-exporter binaries (the same image used by the

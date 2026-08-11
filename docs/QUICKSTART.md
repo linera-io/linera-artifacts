@@ -37,7 +37,7 @@ That one command:
 4. Writes `docker/.env` from `.env.production.template` **with your values
    filled in** — `DOMAIN`, `ACME_EMAIL`, `GENESIS_URL`, `GENESIS_BUCKET`,
    `GENESIS_PATH_PREFIX`, `VALIDATOR_KEY`, `VALIDATOR_NAME`, `HOSTNAME`,
-   `LINERA_IMAGE` and `NUM_SHARDS`. It does not just copy the template; you
+   `LINERA_VALIDATOR_IMAGE`, `LINERA_CLIENT_IMAGE` and `NUM_SHARDS`. It does not just copy the template; you
    do not need to edit the result before starting.
 5. Brings the whole stack up
 
@@ -107,8 +107,10 @@ kubectl --namespace linera create secret generic validator-config \
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator-stack \
   --namespace linera \
-  --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
-  --set linera-validator.image.tag=testnet_conway_release \
+  --set linera-validator.validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set linera-validator.validatorImage.tag=testnet_conway_release \
+  --set linera-validator.clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set linera-validator.clientImage.tag=testnet_conway_release \
   --set linera-validator.validator.existingSecret=validator-config
 ```
 
@@ -134,8 +136,10 @@ Skip the umbrella when you already manage ScyllaDB separately:
 helm install validator-1 \
   oci://ghcr.io/linera-io/charts/linera-validator \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
-  --set image.tag=testnet_conway_release \
+  --set validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+  --set validatorImage.tag=testnet_conway_release \
+  --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
+  --set clientImage.tag=testnet_conway_release \
   --set storage.uri='scylladb:tcp:my-scylla.svc:9042' \
   --set validator.existingSecret=validator-config
 ```

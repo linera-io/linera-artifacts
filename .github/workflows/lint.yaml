@@ -205,7 +205,7 @@ jobs:
           # linera-validator: render with both ingress and gateway enabled
           # and serviceMonitor on, so every optional resource is exercised.
           render_and_validate helm/linera-validator \
-            --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set validatorImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
             --set validator.serverConfigData=stub \
             --set validator.genesisConfigData=stub \
             --set serviceMonitor.enabled=true \
@@ -220,7 +220,7 @@ jobs:
 
           # linera-block-exporter
           render_and_validate helm/linera-block-exporter \
-            --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set exporterImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-exporter \
             --set storage.uri=scylladb:tcp:scylla:9042 \
             --set 'destinations[0].kind=Indexer' \
             --set 'destinations[0].endpoint=indexer.svc' \
@@ -229,6 +229,7 @@ jobs:
             --set serviceMonitor.enabled=true
 
           # linera-validator-stack (umbrella)
+          REG=us-docker.pkg.dev/linera-io-dev/linera-public-registry
           render_and_validate helm/linera-validator-stack \
-            --set linera-validator.image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera \
+            --set linera-validator.validatorImage.repository="$REG/linera-validator" \
             --set linera-validator.validator.existingSecret=validator-config

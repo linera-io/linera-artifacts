@@ -49,7 +49,7 @@ spec:
     spec:
       serviceAccountName: {{ include "linera-block-exporter.serviceAccountName" . }}
       terminationGracePeriodSeconds: {{ .Values.exporter.terminationGracePeriodSeconds }}
-      {{- with .Values.image.pullSecrets }}
+      {{- with .Values.exporterImage.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -79,8 +79,8 @@ spec:
       initContainers:
         {{- if .Values.exporter.storageInitCheck.enabled }}
         - name: storage-check
-          image: {{ include "linera-block-exporter.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "linera-block-exporter.clientImage" . }}
+          imagePullPolicy: {{ .Values.exporterImage.pullPolicy }}
           {{- with .Values.exporter.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -159,8 +159,8 @@ spec:
         {{- end }}
       containers:
         - name: linera-exporter
-          image: {{ include "linera-block-exporter.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: {{ include "linera-block-exporter.exporterImage" . }}
+          imagePullPolicy: {{ .Values.exporterImage.pullPolicy }}
           {{- with .Values.exporter.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

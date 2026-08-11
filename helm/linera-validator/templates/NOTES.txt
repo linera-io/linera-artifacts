@@ -4,7 +4,7 @@ Components installed:
   - {{ .Values.shards.replicas }} shard pod(s)
   - {{ .Values.proxies.replicas }} proxy pod(s)
 
-{{- if not .Values.image.repository }}
+{{- if not .Values.validatorImage.repository }}
 
 WARNING: image.repository is empty. The pods will not start until you
 set image.repository (and optionally image.tag) to point at a linera

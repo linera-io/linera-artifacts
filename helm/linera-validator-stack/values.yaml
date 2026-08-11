@@ -21,8 +21,11 @@ linera-validator:
   # All linera-validator values go here. See:
   #   helm show values oci://ghcr.io/linera-io/charts/linera-validator
   # Example:
-  # image:
-  #   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  # validatorImage:
+  #   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator
+  #   tag: testnet_conway_release
+  # clientImage:
+  #   repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client
   #   tag: testnet_conway_release
   # validator:
   #   existingSecret: validator-config

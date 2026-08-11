@@ -60,9 +60,26 @@ ServiceAccount name.
 {{/*
 Image reference.
 */}}
-{{- define "linera-block-exporter.image" -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
-{{- printf "%s:%s" .Values.image.repository $tag -}}
+{{- define "linera-block-exporter.exporterImage" -}}
+{{- $tag := .Values.exporterImage.tag | default .Chart.AppVersion -}}
+{{- printf "%s:%s" .Values.exporterImage.repository $tag -}}
+{{- end }}
+
+{{/*
+Image for the storage-check init container, which runs the `linera` CLI.
+Falls back to `image` when clientImage.repository is unset.
+*/}}
+{{- define "linera-block-exporter.clientImage" -}}
+{{- if .Values.clientImage.repository -}}
+{{- if .Values.clientImage.digest -}}
+{{- printf "%s@%s" .Values.clientImage.repository .Values.clientImage.digest -}}
+{{- else -}}
+{{- $tag := .Values.clientImage.tag | default .Values.exporterImage.tag | default .Chart.AppVersion -}}
+{{- printf "%s:%s" .Values.clientImage.repository $tag -}}
+{{- end -}}
+{{- else -}}
+{{- include "linera-block-exporter.exporterImage" . -}}
+{{- end -}}
 {{- end }}
 
 {{/*

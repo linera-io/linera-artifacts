@@ -39,7 +39,7 @@ cd linera-artifacts
 4. Writes `.env` from `.env.production.template` **with your values filled
    in** — `DOMAIN`, `ACME_EMAIL`, `GENESIS_URL`, `GENESIS_BUCKET`,
    `GENESIS_PATH_PREFIX`, `VALIDATOR_KEY`, `VALIDATOR_NAME`, `HOSTNAME`,
-   `LINERA_IMAGE`, `NUM_SHARDS`. Re-running is safe: an existing `.env` is
+   `LINERA_VALIDATOR_IMAGE`, `LINERA_CLIENT_IMAGE`, `NUM_SHARDS`. Re-running is safe: an existing `.env` is
    backed up and only those keys are patched, so your tuning survives.
 5. Starts the stack with `docker compose up -d --wait`
 
@@ -100,7 +100,7 @@ EOF
 # 4. Generate signing key
 docker run --rm \
   -v "$PWD:/config" -w /config \
-  us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera:testnet_conway_release \
+  us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release \
   /linera-server generate --validators validator-config.toml
 
 # 5. Bring it up
@@ -134,7 +134,8 @@ Key variables:
 | `DOMAIN`              | `your-domain.example.com`             | Public hostname. Caddy obtains a Let's Encrypt cert for this.                              |
 | `ACME_EMAIL`          | `admin@example.com`                   | Registered with Let's Encrypt.                                                             |
 | `GENESIS_URL`         | `…/testnet-conway/genesis.json`       | Where `deploy-validator.sh` fetches genesis from. The stack itself reads `./genesis.json`. |
-| `LINERA_IMAGE`        | `…/linera-public-registry/linera:testnet_conway_release` | Upstream image. Update to change network compatibility.                |
+| `LINERA_VALIDATOR_IMAGE` | `…/linera-public-registry/linera-validator:testnet_conway_release` | linera-server + linera-proxy. Update to change network compatibility. |
+| `LINERA_CLIENT_IMAGE` | `…/linera-public-registry/linera-client:testnet_conway_release` | The `linera` CLI, used by `shard-init`. Keep in step with the validator image. |
 | `SCYLLA_DEVELOPER_MODE` | `0`                                 | Set to `1` only for local testing (skips ScyllaDB io_setup checks).                       |
 | `STORAGE_REPLICATION_FACTOR` | `1`                            | Matches single-node Scylla. Do not change without a Scylla cluster.                         |
 | `PROXY_PORT`          | `19100`                               | Host port the proxy is bound to (behind Caddy on 443).                                     |

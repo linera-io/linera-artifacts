@@ -163,8 +163,10 @@ deployments:
           # Short fullname so service hostnames stay readable and match
           # the validator-config.toml the bootstrap function generates.
           fullnameOverride: validator
-          image:
+          validatorImage:
             repository: ${LINERA_IMAGE}
+          clientImage:
+            repository: ${LINERA_CLIENT_IMAGE:-${LINERA_IMAGE}}
             tag: ${LINERA_TAG}
           validator:
             existingSecret: validator-config
@@ -206,7 +208,8 @@ dev:
 profiles:
   # Developer building a custom linera binary: devspace will use your
   # override instead of the public image.
-  #   export LINERA_IMAGE=localhost:5000/linera
+  #   export LINERA_IMAGE=localhost:5000/linera-validator
+  #   export LINERA_CLIENT_IMAGE=localhost:5000/linera-client
   #   export LINERA_TAG=dev
   #   devspace use profile custom-image
   #   devspace dev

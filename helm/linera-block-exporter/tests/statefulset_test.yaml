@@ -2,8 +2,8 @@ suite: statefulset
 release:
   name: rel
 set:
-  image.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
-  image.tag: testnet_conway_release
+  exporterImage.repository: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera
+  exporterImage.tag: testnet_conway_release
   storage.uri: scylladb:tcp:scylla:9042
   destinations:
     - kind: Indexer
