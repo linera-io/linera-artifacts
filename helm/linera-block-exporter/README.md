@@ -35,8 +35,8 @@ blocks.
 helm install validator-1-exporter \
   oci://ghcr.io/linera-io/charts/linera-block-exporter \
   --namespace linera \
-  --set image.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-exporter \
-  --set image.tag=testnet_conway_release \
+  --set exporterImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-exporter \
+  --set exporterImage.tag=testnet_conway_release \
   --set clientImage.repository=us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client \
   --set clientImage.tag=testnet_conway_release \
   --set storage.uri='scylladb:tcp:scylla-client.scylla.svc.cluster.local:9042' \
@@ -111,11 +111,11 @@ each TOML.
 | exporter.terminationGracePeriodSeconds | int | `30` |  |
 | exporter.tolerations | list | `[]` |  |
 | exporter.topologySpreadConstraints | list | `[]` |  |
+| exporterImage.pullPolicy | string | `"IfNotPresent"` |  |
+| exporterImage.pullSecrets | list | `[]` |  |
+| exporterImage.repository | string | `""` | Image with the linera-exporter binary (REQUIRED). Since the upstream image split this is `linera-exporter`. It is NOT the linera-validator image, which carries only linera-server and linera-proxy. |
+| exporterImage.tag | string | `""` | Image tag. Defaults to .Chart.appVersion when empty. |
 | fullnameOverride | string | `""` |  |
-| image.pullPolicy | string | `"IfNotPresent"` |  |
-| image.pullSecrets | list | `[]` |  |
-| image.repository | string | `""` | Image with the linera-exporter binary (REQUIRED). Since the upstream image split this is `linera-exporter`. It is NOT the linera-validator image, which carries only linera-server and linera-proxy. |
-| image.tag | string | `""` | Image tag. Defaults to .Chart.appVersion when empty. |
 | limits.auxiliaryCacheSizeMb | int | `1024` |  |
 | limits.blobCacheItemsCapacity | int | `8192` |  |
 | limits.blobCacheWeightMb | int | `1024` |  |
