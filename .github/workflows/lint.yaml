@@ -229,7 +229,7 @@ jobs:
             --set serviceMonitor.enabled=true
 
           # linera-validator-stack (umbrella)
+          REG=us-docker.pkg.dev/linera-io-dev/linera-public-registry
           render_and_validate helm/linera-validator-stack \
-            --set linera-validator.validatorImage.repository=\
-                us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator \
+            --set linera-validator.validatorImage.repository="$REG/linera-validator" \
             --set linera-validator.validator.existingSecret=validator-config
