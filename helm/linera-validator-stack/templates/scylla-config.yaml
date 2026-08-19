@@ -4,6 +4,11 @@ kind: ConfigMap
 metadata:
   name: scylla-config
   namespace: {{ .Values.scylla.namespace | quote }}
+  annotations:
+    # Must share the ScyllaCluster's wave: scyllacluster.yaml names this in
+    # `scyllaConfig: scylla-config`, so a cluster created in wave -1 with its
+    # config left in wave 0 would come up without the config it was given.
+    argocd.argoproj.io/sync-wave: "-1"
   labels:
     {{- include "linera-validator-stack.labels" . | nindent 4 }}
 data:
