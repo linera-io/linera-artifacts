@@ -4,6 +4,28 @@ kind: ScyllaCluster
 metadata:
   name: {{ .Values.scylla.name | quote }}
   namespace: {{ .Values.scylla.namespace | quote }}
+  annotations:
+    # Applied BEFORE the shards and proxy StatefulSets, which are wave 0.
+    #
+    # Not a preference — it is what stops a transient failure here from
+    # deadlocking the whole sync. Those StatefulSets run a storage-init
+    # container that loops until this cluster answers CQL, so in a shared wave
+    # ArgoCD waits for them to be healthy, they wait for a ScyllaCluster that
+    # failed to apply, and the wave can never complete. The operation then
+    # never finishes, so it is never retried AND a manual `argocd app sync` is
+    # refused with "another operation is already in progress" until someone
+    # runs terminate-op.
+    #
+    # The trigger is a startup race, which is why it is intermittent: the
+    # scylla-operator's admission webhook can still have no endpoints when this
+    # is applied, and the apply fails with `failed calling webhook
+    # "webhook.scylla.scylladb.com"`. In an earlier wave the same failure is
+    # harmless — nothing exists yet that could block the wave's health, so
+    # ArgoCD simply retries until the webhook is serving.
+    #
+    # Same wave as the namespace this lives in; ArgoCD orders Namespace ahead
+    # of custom resources within a wave.
+    argocd.argoproj.io/sync-wave: "-1"
   labels:
     {{- include "linera-validator-stack.labels" . | nindent 4 }}
 spec:
