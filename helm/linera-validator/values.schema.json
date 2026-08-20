@@ -98,10 +98,24 @@
                 },
                 "envoyClientTrafficPolicy": {
                     "type": "object",
-                    "description": "Envoy Gateway ClientTrafficPolicy targeting the validator Gateway (downstream client side). Opt-in. timeout passed through 1:1 to spec.timeout; validated by the Envoy Gateway CRD at apply time.",
+                    "description": "Envoy Gateway ClientTrafficPolicy targeting the validator Gateway (downstream client side). Opt-in. http2 sizes the downstream window, which Envoy defaults to 64KiB -- that caps a stream at window/RTT and binds on a wide-area link long before CPU does. timeout passed through 1:1 to spec.timeout; validated by the Envoy Gateway CRD at apply time.",
                     "properties": {
                         "enabled": {
                             "type": "boolean"
+                        },
+                        "http2": {
+                            "type": "object",
+                            "properties": {
+                                "maxConcurrentStreams": {
+                                    "type": "integer"
+                                },
+                                "initialStreamWindowSize": {
+                                    "type": "integer"
+                                },
+                                "initialConnectionWindowSize": {
+                                    "type": "integer"
+                                }
+                            }
                         },
                         "timeout": {
                             "type": "object",

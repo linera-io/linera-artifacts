@@ -595,6 +595,18 @@ gateway:
   # spec.timeout (Envoy Gateway validates it); same Go-style durations.
   envoyClientTrafficPolicy:
     enabled: false
+    # Envoy's downstream HTTP/2 defaults are 64KiB windows, which cap a stream
+    # at window/RTT regardless of how much capacity either end has. Over a
+    # wide-area link that binds long before anything else does: measured on a
+    # London->us-east1 benchmark, Envoy paused reading from the client 9,305
+    # times/second while every node sat under 30% CPU and no request queued.
+    # These mirror envoyBackendTrafficPolicy.http2 so both legs of the path are
+    # sized alike -- tuning only the upstream leg leaves the client side on
+    # defaults, which is the asymmetry that produced that measurement.
+    http2:
+      maxConcurrentStreams: 1000000
+      initialStreamWindowSize: 16777216
+      initialConnectionWindowSize: 67108864
     timeout:
       http:
         # Above Envoy's ~5min stream-idle default; applies when enabled.
