@@ -590,8 +590,11 @@ gateway:
 
   # -- Opt-in ClientTrafficPolicy on the validator Gateway (downstream
   # client↔Envoy side); the only place to set Envoy's HTTP stream-idle
-  # timeout (~5min default). enabled:false renders nothing; enabling
-  # affects the whole Gateway. timeout passed through 1:1 to
+  # timeout (~5min default) and the downstream HTTP/2 window sizes.
+  # enabled:false renders nothing; enabling affects the whole Gateway.
+  # http2 mirrors envoyBackendTrafficPolicy.http2: Envoy defaults both
+  # windows to 64KiB, which caps a stream at window/RTT and binds on a
+  # wide-area link long before CPU does. timeout passed through 1:1 to
   # spec.timeout (Envoy Gateway validates it); same Go-style durations.
   envoyClientTrafficPolicy:
     enabled: false
