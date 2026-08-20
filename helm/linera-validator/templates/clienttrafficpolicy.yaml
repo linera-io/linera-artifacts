@@ -11,6 +11,18 @@ spec:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: {{ include "linera-validator.fullname" . }}
+  {{- with $ctp.http2 }}
+  http2:
+    {{- with .maxConcurrentStreams }}
+    maxConcurrentStreams: {{ int . }}
+    {{- end }}
+    {{- with .initialStreamWindowSize }}
+    initialStreamWindowSize: {{ int . }}
+    {{- end }}
+    {{- with .initialConnectionWindowSize }}
+    initialConnectionWindowSize: {{ int . }}
+    {{- end }}
+  {{- end }}
   {{- with $ctp.timeout }}
   timeout:
     {{- toYaml . | nindent 4 }}
