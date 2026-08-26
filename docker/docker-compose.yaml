@@ -106,6 +106,12 @@ services:
     image: ${SCYLLA_IMAGE:-scylladb/scylla:6.2.3}
     container_name: scylla
     restart: unless-stopped
+    # Let ScyllaDB finish flushing before Docker kills it. Docker's default is
+    # 10s, and the image's own supervisord already allows 900s
+    # (stopwaitsecs=900), so that 10s was the only thing turning every stop into
+    # a SIGKILL with un-flushed memtables. This is a CEILING, not a wait: a
+    # healthy node still exits in seconds.
+    stop_grace_period: ${SCYLLA_STOP_GRACE_PERIOD:-900s}
     logging: *default-logging
     # Optional CPU pinning for dedicated hardware. Empty (default) = no
     # pinning, matching the shared-host case. Set SCYLLA_CPUSET (logical CPU
