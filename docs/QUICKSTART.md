@@ -16,7 +16,9 @@ auto-updates via Watchtower, host-level Scylla tuning all wired up.
 - Hardware that meets the [recommended tier](HARDWARE.md) — 16-core /
   64 GB / NVMe SSD. Slower disks (HDD, network-attached storage) cause
   ScyllaDB to backpressure and OOM-kill the validator shards.
-- Docker + docker compose plugin
+- Docker + docker compose plugin, **v2.30 or newer** (`docker compose version`).
+  2.30 added the lifecycle hooks used to drain ScyllaDB before it stops; an
+  older plugin rejects the compose file outright rather than degrading.
 - A public DNS name pointing at this host (for Let's Encrypt)
 - Ports 80 and 443 reachable from the internet
 

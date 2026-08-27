@@ -106,11 +106,17 @@ services:
     image: ${SCYLLA_IMAGE:-scylladb/scylla:6.2.3}
     container_name: scylla
     restart: unless-stopped
-    # Let ScyllaDB finish flushing before Docker kills it. Docker's default is
-    # 10s, and the image's own supervisord already allows 900s
-    # (stopwaitsecs=900), so that 10s was the only thing turning every stop into
-    # a SIGKILL with un-flushed memtables. This is a CEILING, not a wait: a
-    # healthy node still exits in seconds.
+    # Drain before stopping, mirroring what scylla-operator does on Kubernetes
+    # via its preStop hook. `nodetool drain` stops ScyllaDB accepting writes and
+    # flushes memtables, so the shutdown that follows converges instead of
+    # chasing writes the shards are still sending — which is exactly the case
+    # for `docker compose restart scylla`, where the validator keeps running.
+    pre_stop:
+      - command: ["nodetool", "drain"]
+    # Then give the stop itself room. Docker's default is 10s; the image's own
+    # supervisord already allows 900s (stopwaitsecs=900), so that 10s was the
+    # only thing forcing a SIGKILL. A CEILING, not a wait: a drained node exits
+    # in seconds.
     stop_grace_period: ${SCYLLA_STOP_GRACE_PERIOD:-900s}
     logging: *default-logging
     # Optional CPU pinning for dedicated hardware. Empty (default) = no
