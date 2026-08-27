@@ -104,7 +104,7 @@ Snapshot or `rsync` the lot:
 
 ```bash
 cd ~/linera-artifacts/docker
-docker compose stop scylla                # consistent snapshot
+docker compose stop scylla                # waits for ScyllaDB to flush; see below
 sudo tar czf ~/validator-backup-$(date +%F).tgz \
   data/scylla server.json genesis.json validator-config.toml .env
 docker compose start scylla
