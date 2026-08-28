@@ -50,10 +50,17 @@ jobs:
       - uses: actions/checkout@v5
       - name: shellcheck
         run: |
-          if compgen -G "docker/*/entrypoint.sh" > /dev/null; then
-            sudo apt-get update && sudo apt-get install -y shellcheck
-            shellcheck docker/*/entrypoint.sh
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          mapfile -t scripts < <(git ls-files '*.sh')
+          # A linter that silently finds nothing is worse than no linter, so
+          # an empty match is a failure rather than a green no-op.
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "no tracked *.sh files found — this job is meant to lint some" >&2
+            exit 1
           fi
+          printf 'linting: %s\n' "${scripts[@]}"
+          shellcheck --severity=warning "${scripts[@]}"
 
   deploy-script-smoke:
     runs-on: ubuntu-latest
