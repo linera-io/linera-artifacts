@@ -49,7 +49,10 @@ Options:
 --skip-genesis      Don't download — assume genesis.json is already there.
 --force-genesis     Re-download even if a copy exists.
 --image-tag TAG     Override the linera image tag (default: testnet_conway_release).
---linera-image REF  Override the full image reference.
+--validator-image REF
+                    Override the linera-validator image (runs linera-server /
+                    linera-proxy, and generates the validator key).
+--client-image REF  Override the linera-client image (runs the `linera` CLI).
 --xfs-path PATH     Bind-mount this XFS dir for ScyllaDB data.
 --num-shards N      Number of shards (must match docker-compose.yaml services).
 --dry-run           Print what would happen, change nothing.
