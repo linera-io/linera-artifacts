@@ -78,8 +78,11 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run
+          # Derived, not hardcoded: --num-shards must match the compose stack.
+          shards=$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' \
+            docker/docker-compose.yaml)
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
-            --image-tag some-tag --num-shards 2
+            --image-tag some-tag --num-shards "$shards"
           ./scripts/deploy-validator.sh --help | grep -q -- '--client-image'
       # Nothing previously checked that the .env the script writes actually
       # produces a valid stack. `compose config` resolves every interpolation
