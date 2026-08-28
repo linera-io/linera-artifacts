@@ -16,7 +16,12 @@
 #   --skip-genesis      Don't download genesis.json — assume it's already in place.
 #   --force-genesis     Re-download genesis.json even if a copy exists locally.
 #   --image-tag TAG     Linera image tag (default: testnet_conway_release).
-#   --linera-image REF  Override the full image reference (registry/name:tag).
+#   --validator-image REF
+#                       Override the linera-validator image reference
+#                       (registry/name:tag). Runs linera-server / linera-proxy
+#                       and generates the validator key.
+#   --client-image REF  Override the linera-client image reference. Runs the
+#                       `linera` CLI that shard-init invokes.
 #   --xfs-path PATH     Bind-mount this XFS directory as the ScyllaDB data dir.
 #   --num-shards N      Number of shards in validator-config.toml (default: 4).
 #                       Must match the number of shard-N services in
@@ -48,7 +53,8 @@ readonly REPO_ROOT
 readonly COMPOSE_DIR="${REPO_ROOT}/docker"
 
 readonly DEFAULT_REGISTRY="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
-readonly DEFAULT_IMAGE_NAME="linera-validator"
+readonly DEFAULT_VALIDATOR_IMAGE_NAME="linera-validator"
+readonly DEFAULT_CLIENT_IMAGE_NAME="linera-client"
 readonly DEFAULT_IMAGE_TAG="testnet_conway_release"
 readonly DEFAULT_GENESIS_BUCKET="https://storage.googleapis.com/linera-io-dev-public"
 readonly DEFAULT_NETWORK="testnet-conway"
@@ -71,7 +77,9 @@ log() {
 }
 
 usage() {
-    sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
+    # Print the header block verbatim; stops at the first non-comment line so
+    # adding an option can never silently truncate --help again.
+    awk 'NR < 3 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
 }
 
 die() {
@@ -244,8 +252,9 @@ generate_validator_keys() {
 }
 
 build_env() {
-    local host="$1" email="$2" image="$3" genesis_url="$4" \
-          genesis_bucket="$5" genesis_prefix="$6" public_key="$7" num_shards="$8"
+    # validator_image / client_image come from main's scope.
+    local host="$1" email="$2" genesis_url="$3" \
+          genesis_bucket="$4" genesis_prefix="$5" public_key="$6" num_shards="$7"
     local template="${COMPOSE_DIR}/.env.production.template"
     local env_file="${COMPOSE_DIR}/.env"
     [[ -f "$template" ]] || die "Template missing: ${template}"
@@ -318,8 +327,8 @@ main() {
         echo "  Use LINERA_VALIDATOR_IMAGE and LINERA_CLIENT_IMAGE instead." >&2
         exit 1
     fi
-    [ -n "$validator_image" ] || validator_image="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:${image_tag}"
-    [ -n "$client_image" ] || client_image="us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-client:${image_tag}"
+    [ -n "$validator_image" ] || validator_image="${DEFAULT_REGISTRY}/${DEFAULT_VALIDATOR_IMAGE_NAME}:${image_tag}"
+    [ -n "$client_image" ] || client_image="${DEFAULT_REGISTRY}/${DEFAULT_CLIENT_IMAGE_NAME}:${image_tag}"
     local num_shards="${NUM_SHARDS:-$DEFAULT_NUM_SHARDS}"
     local xfs_path="${SCYLLA_XFS_PATH:-}"
     local with_alloy="${WITH_ALLOY:-0}"
@@ -330,7 +339,9 @@ main() {
             --skip-genesis)   skip_genesis=1; shift ;;
             --force-genesis)  force_genesis=1; shift ;;
             --image-tag)      image_tag="$2"; shift 2 ;;
-            --linera-image)   linera_image="$2"; shift 2 ;;
+            --validator-image) validator_image="$2"; shift 2 ;;
+            --client-image)   client_image="$2"; shift 2 ;;
+            --linera-image)   die "--linera-image is no longer used. Pass --validator-image and/or --client-image instead." ;;
             --xfs-path)       xfs_path="$2"; shift 2 ;;
             --num-shards)     num_shards="$2"; shift 2 ;;
             --with-alloy)     with_alloy=1; shift ;;
@@ -363,10 +374,6 @@ main() {
     [[ $skip_genesis -eq 1 && $force_genesis -eq 1 ]] && \
         die "--skip-genesis and --force-genesis are mutually exclusive"
 
-    if [[ -z "$linera_image" ]]; then
-        linera_image="${DEFAULT_REGISTRY}/${DEFAULT_IMAGE_NAME}:${image_tag}"
-    fi
-
     local genesis_bucket="${GENESIS_BUCKET:-$DEFAULT_GENESIS_BUCKET}"
     local genesis_prefix="${GENESIS_PATH_PREFIX:-$DEFAULT_NETWORK}"
     local genesis_url="${GENESIS_URL:-${genesis_bucket}/${genesis_prefix}/genesis.json}"
@@ -374,7 +381,8 @@ main() {
     log INFO "=== Linera validator deployment ==="
     log INFO "Host:           ${host}"
     log INFO "Email:          ${email}"
-    log INFO "Image:          ${linera_image}"
+    log INFO "Validator image: ${validator_image}"
+    log INFO "Client image:   ${client_image}"
     log INFO "Genesis URL:    ${genesis_url}"
     log INFO "Num shards:     ${num_shards}"
     [[ -n "$xfs_path" ]] && log INFO "Scylla XFS path: ${xfs_path}"
@@ -391,9 +399,9 @@ main() {
     generate_validator_config "$host" "$num_shards"
 
     local public_key
-    public_key="$(generate_validator_keys "$linera_image")"
+    public_key="$(generate_validator_keys "$validator_image")"
 
-    build_env "$host" "$email" "$linera_image" \
+    build_env "$host" "$email" \
               "$genesis_url" "$genesis_bucket" "$genesis_prefix" \
               "$public_key" "$num_shards"
 

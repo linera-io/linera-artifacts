@@ -55,6 +55,23 @@ jobs:
             shellcheck docker/*/entrypoint.sh
           fi
 
+  deploy-script-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # --dry-run touches no network and starts no container, so this is a
+      # cheap guard on argument parsing and image defaulting -- the paths a
+      # validator hits before anything is created.
+      - name: deploy-validator.sh --dry-run
+        run: |
+          set -euo pipefail
+          ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run
+          ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
+            --validator-image reg/val:tag --client-image reg/cli:tag
+          ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
+            --image-tag some-tag --num-shards 2
+          ./scripts/deploy-validator.sh --help | grep -q -- '--client-image'
+
   helm-docs:
     runs-on: ubuntu-latest
     steps:
