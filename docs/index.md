@@ -1,10 +1,15 @@
 # Linera Validator Artifacts
 
-Public deployment artifacts for the [Linera protocol](https://github.com/linera-io/linera-protocol).
-
 Everything you need to stand up, operate, and upgrade a Linera
 validator: Helm charts, a single-host Docker Compose stack, deploy
 scripts, and operator guides.
+
+**This repository is the source of truth for deploying a validator.**
+[linera-protocol](https://github.com/linera-io/linera-protocol) is the
+protocol and binaries — build them there, deploy them from here. It also
+contains an older `scripts/deploy-validator.sh` that predates this
+repository and is not maintained as the operator entry point. If you
+arrived from linera-protocol, run the script from *this* repository.
 
 ## Quickstart
 
@@ -13,6 +18,8 @@ Two supported paths — pick whichever matches your environment.
 ### One host (Docker Compose)
 
 ```bash
+git clone https://github.com/linera-io/linera-artifacts.git
+cd linera-artifacts
 ./scripts/deploy-validator.sh <hostname> <email>
 ```
 
