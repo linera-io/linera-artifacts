@@ -62,22 +62,38 @@ jobs:
           printf 'linting: %s\n' "${scripts[@]}"
           shellcheck --severity=warning "${scripts[@]}"
 
-  deploy-script-smoke:
+  deploy-script-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # --dry-run touches no network and starts no container, so this is a
-      # cheap guard on argument parsing and image defaulting -- the paths a
-      # validator hits before anything is created.
+      # Runs the script for real against a stubbed docker and asserts the files
+      # it writes. --dry-run returns early from the three functions that produce
+      # a validator's config, so a dry-run smoke test cannot see a wrong image
+      # or a mangled .env -- both of which shipped under exactly that gap.
+      - name: deploy-validator.sh end-to-end
+        run: ./tests/deploy-validator-test.sh
+      # --dry-run still covers the paths a validator hits before any file is
+      # created, and it is the mode the docs tell operators to rehearse with.
       - name: deploy-validator.sh --dry-run
         run: |
           set -euo pipefail
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
-            --validator-image reg/val:tag --client-image reg/cli:tag
-          ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
             --image-tag some-tag --num-shards 2
           ./scripts/deploy-validator.sh --help | grep -q -- '--client-image'
+      # The other operator-facing scripts expose the same two flags. Nothing
+      # asserts their output yet, but a script that aborts on --help is broken
+      # for everyone, and that is what just happened.
+      - name: other scripts respond to --help and --dry-run
+        run: |
+          set -euo pipefail
+          ./scripts/install-prereqs.sh --help > /dev/null
+          ./scripts/install-prereqs.sh --dry-run > /dev/null
+          ./scripts/upgrade-env.sh --help > /dev/null
+          # upgrade-env.sh refuses to run without an existing .env, by design.
+          cp docker/.env.production.template docker/.env
+          ./scripts/upgrade-env.sh --dry-run > /dev/null
+          rm -f docker/.env
 
   helm-docs:
     runs-on: ubuntu-latest
