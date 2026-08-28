@@ -103,6 +103,24 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
+# validator-config.toml addresses shards by the hostname compose gives them, so
+# asking for more shards than the stack defines yields a config pointing at
+# containers that will never exist — a validator that starts and then cannot
+# reach half its shards. Counted from the compose file so the two cannot drift.
+validate_num_shards() {
+    local requested="$1"
+    local compose="${COMPOSE_DIR}/docker-compose.yaml"
+    [[ "$requested" =~ ^[1-9][0-9]*$ ]] || die "--num-shards must be a positive integer, got: ${requested}"
+    [[ -f "$compose" ]] || die "Missing ${compose}"
+    local available
+    available="$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "$compose")"
+    if [[ "$requested" -ne "$available" ]]; then
+        die "--num-shards is ${requested} but docker-compose.yaml defines ${available} shard services.
+  They must match, or the validator will address shards that do not exist.
+  Either pass --num-shards ${available}, or add/remove shard services in ${compose}."
+    fi
+}
+
 # A validator opens many short-lived gRPC/DNS connections. A low
 # netfilter conntrack limit fills up and the kernel silently drops
 # packets (including DNS), surfacing as cross-chain failures. Heavily
@@ -365,6 +383,7 @@ main() {
     [[ -n "$email" ]] || { usage; die "email is required"; }
     validate_host "$host"
     validate_email "$email"
+    validate_num_shards "$num_shards"
 
     require_cmd docker
     docker compose version >/dev/null 2>&1 || die "Missing required command: docker compose"
