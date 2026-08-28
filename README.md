@@ -5,8 +5,13 @@
 [![Discord](https://img.shields.io/discord/984941796272521226)](https://discord.com/invite/linera)
 [![Docs](https://img.shields.io/badge/docs-validator-blue)](https://docs.infra.linera.net/)
 
-Deployment artifacts for the [Linera protocol](https://github.com/linera-io/linera-protocol):
-Helm charts, a single-host Docker Compose stack, and operator scripts.
+Helm charts, a single-host Docker Compose stack, and operator scripts for
+running a [Linera](https://github.com/linera-io/linera-protocol) validator.
+
+**This repository is the source of truth for deploying a validator.**
+linera-protocol is the protocol and binaries; the older
+`scripts/deploy-validator.sh` it still carries is not the operator entry
+point. Deploy from here.
 
 ## Repository layout
 
