@@ -92,16 +92,45 @@ assert_eq "LINERA_CLIENT_IMAGE"    "${REGISTRY}/linera-client:${DEFAULT_TAG}" \
 rm -rf "$d"
 
 # --- validator-config.toml -------------------------------------------------
-start_case "validator-config.toml matches host and shard count"
+start_case "validator-config.toml addresses exactly the shards compose defines"
 d="$(new_sandbox)"
-run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards 3
+compose_shards="$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "$d/docker/docker-compose.yaml")"
+run_deploy "$d" v.example.com ops@example.com --skip-genesis
 toml="$d/docker/validator-config.toml"
-assert_contains "host"        'host = "v.example.com"' "$toml"
-assert_contains "shard 1"     'host = "docker-shard-1"' "$toml"
-assert_contains "shard 3"     'host = "docker-shard-3"' "$toml"
-assert_eq "shard count" "3" "$(grep -c '^\[\[shards\]\]' "$toml")"
-assert_eq "NUM_SHARDS mirrors --num-shards" "3" "$(env_value "$d" NUM_SHARDS)"
-if grep -q 'docker-shard-4' "$toml"; then fail "shard 4 present with --num-shards 3"; fi
+assert_contains "host"    'host = "v.example.com"' "$toml"
+assert_contains "shard 1" 'host = "docker-shard-1"' "$toml"
+assert_contains "last shard" "host = \"docker-shard-${compose_shards}\"" "$toml"
+assert_eq "shard count matches compose" "$compose_shards" "$(grep -c '^\[\[shards\]\]' "$toml")"
+assert_eq "NUM_SHARDS matches compose"  "$compose_shards" "$(env_value "$d" NUM_SHARDS)"
+# Every shard the config names must be a hostname compose actually provides.
+while read -r shard_host; do
+    grep -qE "^[[:space:]]+hostname: ${shard_host}$" "$d/docker/docker-compose.yaml" \
+        || fail "config addresses ${shard_host}, which compose does not define"
+done < <(sed -n 's/^host = "\(docker-shard-[0-9]*\)"$/\1/p' "$toml")
+rm -rf "$d"
+
+# --num-shards used to be accepted unchecked, writing a config that addressed
+# containers the stack never creates.
+start_case "--num-shards must match the compose shard count"
+d="$(new_sandbox)"
+compose_shards="$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "$d/docker/docker-compose.yaml")"
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards $((compose_shards + 4)); then
+    fail "too many shards was accepted"
+else
+    assert_contains "error names both counts" "docker-compose.yaml defines ${compose_shards}" "$d/stderr.log"
+fi
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards $((compose_shards - 1)); then
+    fail "too few shards was accepted"
+fi
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards 0; then
+    fail "zero shards was accepted"
+fi
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards abc; then
+    fail "non-numeric shard count was accepted"
+fi
+if ! run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards "$compose_shards"; then
+    fail "the matching shard count was rejected"
+fi
 rm -rf "$d"
 
 # --- image selection -------------------------------------------------------

@@ -78,9 +78,43 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run
+          # Derived, not hardcoded: --num-shards must match the compose stack.
+          shards=$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' \
+            docker/docker-compose.yaml)
           ./scripts/deploy-validator.sh v.example.com ops@example.com --dry-run \
-            --image-tag some-tag --num-shards 2
+            --image-tag some-tag --num-shards "$shards"
           ./scripts/deploy-validator.sh --help | grep -q -- '--client-image'
+      # Nothing previously checked that the .env the script writes actually
+      # produces a valid stack. `compose config` resolves every interpolation
+      # and service reference, so a variable renamed on one side of the
+      # script/compose boundary fails here rather than on a validator's host.
+      - name: generated .env produces a valid compose stack
+        run: |
+          set -euo pipefail
+          mkdir -p stub
+          printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > stub/docker
+          chmod +x stub/docker
+          printf '%s\n' '{"validator":{"public_key":"02aa","account_key":{"Ed25519":"bb"}}}' \
+            > docker/server.json
+          printf '{}\n' > docker/genesis.json
+          PATH="$PWD/stub:$PATH" ./scripts/deploy-validator.sh \
+            v.example.com ops@example.com --skip-genesis
+          (
+            cd docker
+            for overlay in "" "-f docker-compose.alloy.yaml" \
+                           "-f docker-compose.local-monitoring.yaml" \
+                           "-f docker-compose.alloy.yaml -f docker-compose.local-monitoring.yaml"; do
+              echo "::group::compose config ${overlay:-base}"
+              # shellcheck disable=SC2086  # deliberate word splitting of the overlay list
+              docker compose -f docker-compose.yaml $overlay config --quiet
+              echo "::endgroup::"
+            done
+            # remote-scylla requires SCYLLA_HOST by design (docker/README.md).
+            SCYLLA_HOST=10.0.0.1 docker compose \
+              -f docker-compose.yaml -f docker-compose.remote-scylla.yaml config --quiet
+          )
+          rm -f docker/.env docker/server.json docker/genesis.json docker/validator-config.toml
+
       # The other operator-facing scripts expose the same two flags. Nothing
       # asserts their output yet, but a script that aborts on --help is broken
       # for everyone, and that is what just happened.
