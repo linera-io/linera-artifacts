@@ -52,6 +52,20 @@ prometheus.scrape "shard_metrics" {
   scrape_timeout  = "10s"
 }
 
+// Scrape metrics from ScyllaDB. Remote deployments must repoint this.
+prometheus.scrape "scylla_metrics" {
+  targets = [{
+    __address__ = "scylla:9180",
+    job         = "scylla",
+    instance    = env("HOSTNAME"),
+  }]
+
+  forward_to = [otelcol.receiver.prometheus.default.receiver]
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
 // Scrape container resource metrics from cAdvisor
 prometheus.scrape "cadvisor_metrics" {
   targets = [{

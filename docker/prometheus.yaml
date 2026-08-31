@@ -28,6 +28,13 @@ scrape_configs:
     static_configs:
       - targets: ['proxy:21100']
 
+  # ScyllaDB. With docker-compose.remote-scylla.yaml the `scylla` name is
+  # repointed via extra_hosts for the validator services only, so a remote
+  # deployment must set this target to SCYLLA_HOST or ScyllaDown misfires.
+  - job_name: 'scylla'
+    static_configs:
+      - targets: ['scylla:9180']
+
   # Linera shards.
   - job_name: 'linera-shard'
     static_configs:
