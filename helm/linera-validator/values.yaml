@@ -153,8 +153,11 @@ validatorLabel: ""
 # =============================================================================
 
 shards:
-  # -- Number of shard replicas.
-  replicas: 4
+  # -- Number of shard replicas. Must equal the number of shards in your
+  # server config: each pod runs `--shard $ORDINAL`, so a pod whose ordinal is
+  # past the end of that list panics on boot. Upgrading an existing release
+  # pins this to whatever you already run.
+  replicas: 8
 
   # -- Tokio worker threads per shard. Empty = one per CPU (Tokio default).
   serverTokioThreads: ""

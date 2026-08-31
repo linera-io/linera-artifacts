@@ -24,7 +24,7 @@ tests:
       - documentIndex: 1
         equal:
           path: spec.replicas
-          value: 4
+          value: 8
       - documentIndex: 1
         equal:
           path: spec.podManagementPolicy
@@ -136,3 +136,43 @@ tests:
         equal:
           path: spec.template.spec.volumes[0].secret.secretName
           value: my-pre-existing-secret
+
+  - it: refuses a replicas count the inline server config cannot serve
+    set:
+      shards.replicas: 8
+      validator.serverConfigData: >-
+        {"internal_network":{"shards":[{"host":"a"},{"host":"b"},{"host":"c"},{"host":"d"}]}}
+    asserts:
+      - failedTemplate:
+          errorPattern: >-
+            shards\.replicas is 8 but validator\.serverConfigData
+            describes 4 shard
+
+  - it: accepts a replicas count matching the inline server config
+    set:
+      shards.replicas: 4
+      validator.serverConfigData: >-
+        {"internal_network":{"shards":[{"host":"a"},{"host":"b"},{"host":"c"},{"host":"d"}]}}
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.replicas
+          value: 4
+
+  - it: stays silent when the inline server config carries no shard list
+    set:
+      shards.replicas: 8
+      validator.serverConfigData: '{"validator":{"public_key":"02aa"}}'
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: cannot check an existingSecret, so it renders
+    set:
+      shards.replicas: 8
+      validator.existingSecret: validator-config
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: spec.replicas
+          value: 8

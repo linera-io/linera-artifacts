@@ -1,3 +1,17 @@
+{{- /*
+Catch a replicas/server-config mismatch at render time rather than as four
+CrashLoopBackOff pods. Only possible for an inline serverConfigData: with
+existingSecret the contents are not visible to the template.
+*/}}
+{{- if .Values.validator.serverConfigData }}
+{{- $config := fromJson .Values.validator.serverConfigData }}
+{{- if and $config.internal_network $config.internal_network.shards }}
+{{- $configured := len $config.internal_network.shards }}
+{{- if ne (int $configured) (int .Values.shards.replicas) }}
+{{- fail (printf "shards.replicas is %d but validator.serverConfigData describes %d shard(s); each pod runs --shard $ORDINAL, so pods past %d panic on boot. Set shards.replicas=%d, or regenerate the server config for %d." (int .Values.shards.replicas) (int $configured) (sub (int $configured) 1) (int $configured) (int .Values.shards.replicas)) }}
+{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
