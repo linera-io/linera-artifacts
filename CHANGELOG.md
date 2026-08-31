@@ -32,6 +32,10 @@ Release channels:
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0] — 2026-08-31
+
 ### Changed
 
 - **BREAKING (chart):** `linera-validator` now defaults `shards.replicas` to
@@ -265,7 +269,8 @@ Initial public release.
 - Artifact Hub registration: per-chart `artifacthub-repo.yml` claim files under
   the `linera-io` organisation.
 
-[Unreleased]: https://github.com/linera-io/linera-artifacts/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/linera-io/linera-artifacts/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/linera-io/linera-artifacts/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/linera-io/linera-artifacts/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/linera-io/linera-artifacts/compare/v0.2.0...v0.2.2
 [0.2.0]: https://github.com/linera-io/linera-artifacts/compare/v0.1.9...v0.2.0
