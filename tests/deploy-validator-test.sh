@@ -83,7 +83,7 @@ assert_eq "DOMAIN"                 "v.example.com"    "$(env_value "$d" DOMAIN)"
 assert_eq "ACME_EMAIL"             "ops@example.com"  "$(env_value "$d" ACME_EMAIL)"
 assert_eq "VALIDATOR_NAME"         "v.example.com"    "$(env_value "$d" VALIDATOR_NAME)"
 assert_eq "HOSTNAME"               "v.example.com"    "$(env_value "$d" HOSTNAME)"
-assert_eq "NUM_SHARDS"             "4"                "$(env_value "$d" NUM_SHARDS)"
+assert_eq "NUM_SHARDS"             "8"                "$(env_value "$d" NUM_SHARDS)"
 assert_eq "VALIDATOR_KEY"          "02aabb,00ccdd"    "$(env_value "$d" VALIDATOR_KEY)"
 assert_eq "LINERA_VALIDATOR_IMAGE" "${REGISTRY}/linera-validator:${DEFAULT_TAG}" \
                                    "$(env_value "$d" LINERA_VALIDATOR_IMAGE)"
@@ -111,16 +111,19 @@ rm -rf "$d"
 
 # --num-shards used to be accepted unchecked, writing a config that addressed
 # containers the stack never creates.
-start_case "--num-shards must match the compose shard count"
+start_case "--num-shards is held to what the compose stack can serve"
 d="$(new_sandbox)"
 compose_shards="$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "$d/docker/docker-compose.yaml")"
-if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards $((compose_shards + 4)); then
-    fail "too many shards was accepted"
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards $((compose_shards + 1)); then
+    fail "more shards than compose defines was accepted"
 else
-    assert_contains "error names both counts" "docker-compose.yaml defines ${compose_shards}" "$d/stderr.log"
+    assert_contains "error names the range" "supports 4..${compose_shards}" "$d/stderr.log"
 fi
-if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards $((compose_shards - 1)); then
-    fail "too few shards was accepted"
+# shard-0..3 carry no profile, so they always run and a smaller count is a lie.
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards 3; then
+    fail "fewer shards than always run was accepted"
+else
+    assert_contains "error names the floor" "supports 4..${compose_shards}" "$d/stderr.log"
 fi
 if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards 0; then
     fail "zero shards was accepted"
@@ -128,9 +131,12 @@ fi
 if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards abc; then
     fail "non-numeric shard count was accepted"
 fi
-if ! run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards "$compose_shards"; then
-    fail "the matching shard count was rejected"
-fi
+# Anything inside the range is fine, including a count below the default.
+for n in 4 6 "$compose_shards"; do
+    if ! run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards "$n"; then
+        fail "--num-shards ${n} was rejected"
+    fi
+done
 rm -rf "$d"
 
 # --- image selection -------------------------------------------------------
@@ -214,7 +220,7 @@ printf 'DOMAIN=old.example.com\nMY_CUSTOM_TUNING=keepme\n' > "$d/docker/.env"
 run_deploy "$d" v.example.com ops@example.com --skip-genesis
 run_deploy "$d" v.example.com ops@example.com --skip-genesis
 assert_eq "custom value survives" "keepme" "$(env_value "$d" MY_CUSTOM_TUNING)"
-assert_eq "NUM_SHARDS written"    "4"      "$(env_value "$d" NUM_SHARDS)"
+assert_eq "NUM_SHARDS written"    "8"      "$(env_value "$d" NUM_SHARDS)"
 assert_eq "validator image written" "${REGISTRY}/linera-validator:${DEFAULT_TAG}" \
           "$(env_value "$d" LINERA_VALIDATOR_IMAGE)"
 rm -rf "$d"
@@ -243,6 +249,39 @@ if run_deploy "$d" v.example.com --skip-genesis; then fail "missing email was ac
 if run_deploy "$d" 'not a host' ops@example.com --skip-genesis; then fail "invalid host accepted"; fi
 if run_deploy "$d" v.example.com 'not-an-email' --skip-genesis; then fail "invalid email accepted"; fi
 rm -rf "$d"
+
+# --- an already-deployed validator keeps its shard count -------------------
+# The default moved from 4 to 8. server.json holds the shard list and is never
+# regenerated (that would rotate the signing key), so a re-run that migrated an
+# existing validator to 8 would start shards indexing past the end of that list
+# and panic every one of them on boot.
+start_case "a re-run never changes the shard count in server.json"
+d="$(new_sandbox)"
+jq '.internal_network = {shards: [range(1;5) | {host: ("docker-shard-" + (. | tostring)), port: 19100}]}' \
+    "$d/docker/server.json" > "$d/server.tmp" && mv "$d/server.tmp" "$d/docker/server.json"
+run_deploy "$d" v.example.com ops@example.com --skip-genesis
+assert_eq "NUM_SHARDS pinned by server.json" "4" "$(env_value "$d" NUM_SHARDS)"
+assert_eq "no extra shard profiles enabled" "" "$(env_value "$d" COMPOSE_PROFILES)"
+assert_eq "validator-config.toml stays at 4" "4" \
+    "$(grep -c '^\[\[shards\]\]' "$d/docker/validator-config.toml")"
+# Asking for a different count is refused, not silently applied.
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis --num-shards 8; then
+    fail "--num-shards 8 was accepted against a 4-shard server.json"
+else
+    assert_contains "mismatch is explained" "server.json describes 4" "$d/stderr.log"
+fi
+assert_eq "NUM_SHARDS unchanged after refusal" "4" "$(env_value "$d" NUM_SHARDS)"
+rm -rf "$d"
+
+# --- a fresh deployment gets the testnet-conway shard count ----------------
+start_case "a fresh deployment defaults to 8 shards and enables their profiles"
+d="$(new_sandbox)"
+run_deploy "$d" v.example.com ops@example.com --skip-genesis
+assert_eq "NUM_SHARDS" "8" "$(env_value "$d" NUM_SHARDS)"
+assert_eq "profiles for shards 4..7" "shard-4,shard-5,shard-6,shard-7" \
+    "$(env_value "$d" COMPOSE_PROFILES)"
+rm -rf "$d"
+
 
 echo
 if [ "$failures" -eq 0 ]; then

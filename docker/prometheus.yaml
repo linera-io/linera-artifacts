@@ -10,8 +10,8 @@ rule_files:
 
 # Job names and the `shard` label match alloy-config.river exactly, so the
 # dashboards work whichever of the two scrape paths you run. `shard` is not
-# emitted by the binaries — it exists only because the scrape config attaches
-# it, and the per-shard panels group by it.
+# emitted by the binaries — both paths relabel it from each shard container's
+# linera.shard label, and the per-shard panels group by it.
 scrape_configs:
   # Alloy's own metrics (exposes a "targets" page at :12345).
   - job_name: 'alloy'
@@ -35,18 +35,23 @@ scrape_configs:
     static_configs:
       - targets: ['scylla:9180']
 
-  # Linera shards.
+  # Linera shards, discovered from the Docker daemon so the shard count is
+  # configurable without editing this file. A static list would alert on the
+  # shards a smaller deployment does not run.
   - job_name: 'linera-shard'
-    static_configs:
-      - targets: ['docker-shard-1:21100']
-        labels:
-          shard: '0'
-      - targets: ['docker-shard-2:21100']
-        labels:
-          shard: '1'
-      - targets: ['docker-shard-3:21100']
-        labels:
-          shard: '2'
-      - targets: ['docker-shard-4:21100']
-        labels:
-          shard: '3'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        port: 21100
+    relabel_configs:
+      # Every shard service carries linera.shard; nothing else does.
+      - source_labels: [__meta_docker_container_label_linera_shard]
+        regex: .+
+        action: keep
+      # The image declares no EXPOSE, so `port` above already yields one
+      # target per container. Pin the address anyway: an EXPOSE added
+      # upstream would otherwise produce a target per exposed port.
+      - source_labels: [__meta_docker_network_ip]
+        target_label: __address__
+        replacement: '$1:21100'
+      - source_labels: [__meta_docker_container_label_linera_shard]
+        target_label: shard

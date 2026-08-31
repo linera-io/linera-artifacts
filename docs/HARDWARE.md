@@ -96,7 +96,7 @@ The compose stack runs everything the two reference machines run — on
 one kernel:
 
 - ScyllaDB (the dominant resource consumer)
-- 4 `linera-server` shards
+- 8 `linera-server` shards (the testnet-conway count; see below)
 - `linera-proxy`
 - Caddy
 - Watchtower + cAdvisor + (optionally) a monitoring stack
@@ -108,7 +108,7 @@ the shards, you need the sum of the two reference machines:
 | Service     | CPU limit  | Memory limit               | Reference equivalent               |
 |-------------|------------|----------------------------|------------------------------------|
 | ScyllaDB    | 7          | 51 GiB                     | 7c / 51 GiB pod on a dedicated node |
-| Shards × 4  | 2 each     | 12 GiB each (48 GiB total) | shards on the workload node        |
+| Shards × 8  | 2 each     | 6 GiB each (48 GiB total)  | shards on the workload node        |
 | Proxy       | 1.5        | 6 GiB                      | proxy on the workload node         |
 | Caddy (web) | 1          | 3 GiB                      | —                                  |
 | Alloy       | 0.5        | 1 GiB                      | —                                  |
@@ -118,6 +118,14 @@ the shards, you need the sum of the two reference machines:
 Set `LIMIT_CPUS_SCYLLA=7` and `LIMIT_MEM_SCYLLA=51G` in `.env` to get
 this — the shipped defaults are conservative and **must** be raised to
 these values on a properly sized host.
+
+Shard count is set once, at deploy time, with `--num-shards` (4–8,
+default 8 to match testnet-conway). It is the **total shard memory**
+that has to fit, not the per-shard figure: 8 × 6 GiB and 4 × 12 GiB both
+come to the same 48 GiB, so a smaller count buys a bigger per-shard
+cache rather than a smaller host. Changing the count afterwards is a
+resharding, not a config edit — see
+[Changing the shard count](DOCKER-COMPOSE.md#changing-the-shard-count).
 
 Two things to know about this table:
 

@@ -380,6 +380,7 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "0"
     # Same probe and timings as the chart's shard livenessProbe.
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
@@ -457,6 +458,7 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "1"
     # Same probe and timings as the chart's shard livenessProbe.
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
@@ -534,6 +536,7 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "2"
     # Same probe and timings as the chart's shard livenessProbe.
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
@@ -611,6 +614,7 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "3"
     # Same probe and timings as the chart's shard livenessProbe.
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
@@ -630,6 +634,326 @@ services:
         limits:
           cpus: "${LIMIT_CPUS_SHARD_3:-2.00}"
           memory: ${LIMIT_MEM_SHARD_3:-6G}
+
+  shard-4:
+    image: >-
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
+    container_name: docker-shard-5
+    hostname: docker-shard-5
+    restart: unless-stopped
+    logging: *default-logging
+    cpuset: "${WORKLOAD_CPUSET:-}"
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "4"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
+    profiles:
+      - shard-4
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "4"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_4:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_4:-6G}
+
+  shard-5:
+    image: >-
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
+    container_name: docker-shard-6
+    hostname: docker-shard-6
+    restart: unless-stopped
+    logging: *default-logging
+    cpuset: "${WORKLOAD_CPUSET:-}"
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "5"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
+    profiles:
+      - shard-5
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "5"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_5:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_5:-6G}
+
+  shard-6:
+    image: >-
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
+    container_name: docker-shard-7
+    hostname: docker-shard-7
+    restart: unless-stopped
+    logging: *default-logging
+    cpuset: "${WORKLOAD_CPUSET:-}"
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "6"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
+    profiles:
+      - shard-6
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "6"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_6:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_6:-6G}
+
+  shard-7:
+    image: >-
+      ${LINERA_VALIDATOR_IMAGE:-us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-validator:testnet_conway_release}
+    container_name: docker-shard-8
+    hostname: docker-shard-8
+    restart: unless-stopped
+    logging: *default-logging
+    cpuset: "${WORKLOAD_CPUSET:-}"
+    command:
+      - /linera-server
+      - run
+      - --storage
+      - scylladb:tcp:scylla:${SCYLLA_PORT:-9042}
+      - --server
+      - /config/server.json
+      - --shard
+      - "7"
+      - --storage-replication-factor
+      - "${STORAGE_REPLICATION_FACTOR:-1}"
+      # Storage (LRU) caches — parity with the k8s chart's shards.cli.
+      - --storage-max-cache-size
+      - "${LINERA_STORAGE_MAX_CACHE_SIZE:-1000000000}"
+      - --storage-max-cache-entries
+      - "${LINERA_STORAGE_MAX_CACHE_ENTRIES:-500000}"
+      - --storage-max-value-entry-size
+      - "${LINERA_STORAGE_MAX_VALUE_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-keys-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEYS_ENTRY_SIZE:-1000000}"
+      - --storage-max-find-key-values-entry-size
+      - "${LINERA_STORAGE_MAX_FIND_KEY_VALUES_ENTRY_SIZE:-1000000}"
+      - --storage-max-cache-value-size
+      - "${LINERA_STORAGE_MAX_CACHE_VALUE_SIZE:-500000000}"
+      - --storage-max-cache-find-keys-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEYS_SIZE:-200000000}"
+      - --storage-max-cache-find-key-values-size
+      - "${LINERA_STORAGE_MAX_CACHE_FIND_KEY_VALUES_SIZE:-10000000}"
+      # In-memory caches — parity with the k8s chart's shards.cli.
+      - --blob-cache-size
+      - "${LINERA_BLOB_CACHE_SIZE:-1000}"
+      - --confirmed-block-cache-size
+      - "${LINERA_CONFIRMED_BLOCK_CACHE_SIZE:-10000}"
+      - --certificate-cache-size
+      - "${LINERA_CERTIFICATE_CACHE_SIZE:-5000}"
+      - --certificate-raw-cache-size
+      - "${LINERA_CERTIFICATE_RAW_CACHE_SIZE:-50000}"
+      - --event-cache-size
+      - "${LINERA_EVENT_CACHE_SIZE:-20000}"
+      - --execution-state-cache-size
+      - "${LINERA_EXECUTION_STATE_CACHE_SIZE:-20000}"
+      - --block-cache-size
+      - "${LINERA_BLOCK_CACHE_SIZE:-20000}"
+      - --chain-worker-ttl-ms
+      - "${LINERA_CHAIN_WORKER_TTL_MS:-300000}"
+    profiles:
+      - shard-7
+    volumes:
+      - .:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      linera.shard: "7"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      shard-init:
+        condition: service_completed_successfully
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-524288}
+        hard: ${ULIMIT_NOFILE:-524288}
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIMIT_CPUS_SHARD_7:-2.00}"
+          memory: ${LIMIT_MEM_SHARD_7:-6G}
 
   # ---------------------------------------------------------------------------
   # Watchtower — periodically polls the registry and pulls new images for
