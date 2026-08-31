@@ -380,6 +380,13 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       shard-init:
         condition: service_completed_successfully
@@ -450,6 +457,13 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       shard-init:
         condition: service_completed_successfully
@@ -520,6 +534,13 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       shard-init:
         condition: service_completed_successfully
@@ -590,6 +611,13 @@ services:
       - .:/config
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    # Same probe and timings as the chart's shard livenessProbe.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/19100' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       shard-init:
         condition: service_completed_successfully
@@ -615,7 +643,8 @@ services:
     cpuset: "${WORKLOAD_CPUSET:-}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: ["--interval", "${WATCHTOWER_INTERVAL:-30}"]
+    # Without --label-enable the labels are ignored and every container updates.
+    command: ["--label-enable", "--interval", "${WATCHTOWER_INTERVAL:-30}"]
     deploy:
       resources:
         limits:
