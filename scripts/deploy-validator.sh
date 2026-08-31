@@ -135,16 +135,12 @@ compose_shard_services() {
 # started with an index past its end panics on boot. Treat what is already
 # deployed as authoritative.
 shards_in_server_json() {
-    local f="${COMPOSE_DIR}/server.json"
-    [[ -f "$f" ]] || return 0
-    # Refuse rather than fall through to the default: guessing here migrates a
-    # running validator to a shard count its server.json cannot serve.
-    command -v jq >/dev/null 2>&1 \
-        || die "jq is required to read the shard count out of ${f}. Install jq and re-run."
     # `empty` rather than 0, so "no shard list" stays distinguishable from
-    # "zero shards" and falls through to the default.
+    # "zero shards". Errors are NOT swallowed: a failure here must reach the
+    # caller, because falling through to the default migrates a running
+    # validator to a shard count its server.json cannot serve.
     jq -r 'if .internal_network.shards then .internal_network.shards | length else empty end' \
-        "$f" 2>/dev/null || true
+        "${COMPOSE_DIR}/server.json"
 }
 
 # COMPOSE_PROFILES is read from .env by docker compose itself. shard-0..3 carry
@@ -426,8 +422,17 @@ main() {
     # running validator, and an explicit request that disagrees is refused
     # rather than applied, because applying it panics every shard past the end
     # of the list server.json still holds.
-    local deployed_shards
-    deployed_shards="$(shards_in_server_json)"
+    local deployed_shards=""
+    if [[ -f "${COMPOSE_DIR}/server.json" ]]; then
+        command -v jq >/dev/null 2>&1 \
+            || die "jq is required to read the shard count out of ${COMPOSE_DIR}/server.json.
+  Without it this script cannot tell how many shards you already run.
+  Install jq and re-run."
+        deployed_shards="$(shards_in_server_json)" \
+            || die "Could not read the shard list from ${COMPOSE_DIR}/server.json.
+  It should be the file linera-server generate wrote. Refusing to guess the
+  shard count: guessing wrong starts shards that panic on boot."
+    fi
     if [[ -n "$deployed_shards" ]]; then
         if [[ -z "$num_shards" ]]; then
             num_shards="$deployed_shards"

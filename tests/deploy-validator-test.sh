@@ -273,6 +273,21 @@ fi
 assert_eq "NUM_SHARDS unchanged after refusal" "4" "$(env_value "$d" NUM_SHARDS)"
 rm -rf "$d"
 
+# --- an unreadable server.json is fatal, never a fallthrough ---------------
+# Swallowing this error silently defaults to DEFAULT_NUM_SHARDS, which is the
+# migration the case above exists to prevent — so the failure has to be loud.
+start_case "a server.json that cannot be read refuses rather than guesses"
+d="$(new_sandbox)"
+printf '%s\n' 'NUM_SHARDS=4' > "$d/docker/.env"
+printf 'not json at all\n' > "$d/docker/server.json"
+if run_deploy "$d" v.example.com ops@example.com --skip-genesis; then
+    fail "an unparseable server.json was accepted"
+else
+    assert_contains "refusal is explained" "Could not read the shard list" "$d/stderr.log"
+fi
+assert_eq "NUM_SHARDS not migrated" "4" "$(env_value "$d" NUM_SHARDS)"
+rm -rf "$d"
+
 # --- a fresh deployment gets the testnet-conway shard count ----------------
 start_case "a fresh deployment defaults to 8 shards and enables their profiles"
 d="$(new_sandbox)"
