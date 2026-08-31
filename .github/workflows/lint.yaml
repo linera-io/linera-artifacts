@@ -44,6 +44,38 @@ jobs:
           fi
           echo "all YAML files use .yaml"
 
+  prometheus-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # Version comes from the compose file so promtool always matches the
+      # Prometheus we actually ship.
+      - name: promtool check rules
+        run: |
+          set -euo pipefail
+          version=$(grep -oP 'PROMETHEUS_IMAGE:-prom/prometheus:v\K[0-9.]+' \
+            docker/docker-compose.local-monitoring.yaml)
+          echo "promtool ${version} (from docker-compose.local-monitoring.yaml)"
+          base="https://github.com/prometheus/prometheus/releases/download"
+          curl -sSLo /tmp/prom.tgz \
+            "${base}/v${version}/prometheus-${version}.linux-amd64.tar.gz"
+          tar -xzf /tmp/prom.tgz -C /tmp
+          /tmp/prometheus-${version}.linux-amd64/promtool check rules \
+            docker/alerts.rules.yaml docker/recording.rules.yaml
+          # --syntax-only: rule_files are container paths (/etc/prometheus/...)
+          # that only exist once the volumes are mounted.
+          /tmp/prometheus-${version}.linux-amd64/promtool check config \
+            --syntax-only docker/prometheus.yaml
+      # promtool passes on a rule that selects a job nobody scrapes, which is
+      # how every alert shipped dead. This is the check that catches it.
+      - name: rule job selectors resolve
+        run: |
+          pip install pyyaml==6.0.2
+          ./tests/check-rule-job-selectors.py
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
