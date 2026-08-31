@@ -1,6 +1,6 @@
 # linera-validator
 
-![Version: 0.2.1](https://img.shields.io/badge/Version-0.2.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.13.0](https://img.shields.io/badge/AppVersion-0.13.0-informational?style=flat-square)
 
 Linera validator core: the shards (StatefulSet) and proxies (StatefulSet)
 that together form a single validator on the Linera network.
@@ -173,7 +173,7 @@ files for common scenarios (single-node dev, GKE production, OVH, …).
 | shards.podSecurityContext | object | `{}` | Pod-level security context. |
 | shards.priorityClassName | string | `""` | Pod priority class name. |
 | shards.readinessProbe | object | `{}` |  |
-| shards.replicas | int | `4` | Number of shard replicas. |
+| shards.replicas | int | `8` | Number of shard replicas. Must equal the number of shards in your server config: each pod runs `--shard $ORDINAL`, so a pod whose ordinal is past the end of that list panics on boot. Upgrading an existing release pins this to whatever you already run. |
 | shards.resources | object | `{"limits":{"cpu":"2","memory":"12Gi"},"requests":{"cpu":"1","memory":"8Gi"}}` | Resource requests and limits. Defaults sized from observed steady state on the testnet-conway production validators (GKE, no resource cap historically): linera-server plateaus around 6.8 GiB p50 / 8.5 GiB p95 / 9.5 GiB max per shard, with bursty <0.5 cpu p95 and ~0.6 cpu max. Set as Burstable QoS — req covers steady state, lim covers plateau + ~25 % headroom. Operators with very different chain workloads should override here. |
 | shards.securityContext | object | `{}` | Container-level security context. |
 | shards.serverTokioThreads | string | `""` | Tokio worker threads per shard. Empty = one per CPU (Tokio default). |

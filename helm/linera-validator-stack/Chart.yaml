@@ -14,7 +14,7 @@ description: |
     - scylla-operator   (for the ScyllaCluster CR)
 type: application
 
-version: 0.2.2
+version: 0.3.0
 appVersion: "0.13.0"
 
 home: https://linera.io
@@ -46,7 +46,7 @@ annotations:
 
 dependencies:
   - name: linera-validator
-    version: 0.2.1
+    version: 0.3.0
     repository: file://../linera-validator
     condition: linera-validator.enabled
   - name: linera-block-exporter

@@ -4,6 +4,15 @@ Components installed:
   - {{ .Values.shards.replicas }} shard pod(s)
   - {{ .Values.proxies.replicas }} proxy pod(s)
 
+{{- if .Values.validator.existingSecret }}
+
+Check that {{ .Values.shards.replicas }} matches the number of shards in
+{{ .Values.validator.existingSecret }}. The chart cannot read that Secret, so
+a mismatch is only visible once the pods past the end of the list start
+crash-looping: each runs `--shard $ORDINAL` against the shard list in your
+server config.
+{{- end }}
+
 {{- if not .Values.validatorImage.repository }}
 
 WARNING: image.repository is empty. The pods will not start until you
