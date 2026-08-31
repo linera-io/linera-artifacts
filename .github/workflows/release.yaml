@@ -117,3 +117,64 @@ jobs:
               "${chart}artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml"
             echo "::endgroup::"
           done
+
+  # Publishing charts is not the same as announcing a release: until now a tag
+  # produced OCI artifacts and nothing an operator could read. This turns the
+  # tag's CHANGELOG section into the GitHub Release body, so "what changed"
+  # lives at the URL people actually open.
+  github-release:
+    needs: publish-charts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && github.event.inputs.tag
+                || github.ref_name }}
+
+      - name: extract this version's CHANGELOG section
+        env:
+          TAG: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && github.event.inputs.tag
+                || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          # Everything between this version's heading and the next one. An
+          # empty result fails the job: a release whose notes silently came
+          # out blank is worse than no release job at all.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## / { exit }
+            found && /^\[[^]]+\]: / { exit }   # the link-reference block
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${version}." >&2
+            echo "::error::Add '## [${version}] — <date>' before tagging." >&2
+            exit 1
+          fi
+          echo "::group::release notes"
+          cat notes.md
+          echo "::endgroup::"
+
+      - name: create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && github.event.inputs.tag
+                || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Idempotent: a re-run of workflow_dispatch updates the notes rather
+          # than failing on an existing release.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag
+          fi
