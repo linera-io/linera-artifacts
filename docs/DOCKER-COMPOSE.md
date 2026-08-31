@@ -54,7 +54,7 @@ Options:
                     linera-proxy, and generates the validator key).
 --client-image REF  Override the linera-client image (runs the `linera` CLI).
 --xfs-path PATH     Bind-mount this XFS dir for ScyllaDB data.
---num-shards N      Number of shards (must match docker-compose.yaml services).
+--num-shards N      Number of shards, 4-8 (default: 8). Fixed after the first deploy.
 --dry-run           Print what would happen, change nothing.
 ```
 
@@ -340,6 +340,35 @@ disks, and NICs with the shards and proxy. The `SCYLLA_CPUSET` /
 `WORKLOAD_CPUSET` pair approximates the CPU half of that; the rest is a
 hard limit of single-host co-tenancy. For full isolation and HA, use the Helm path with a real
 ScyllaDB cluster.
+
+## Changing the shard count
+
+`--num-shards` takes 4 to 8 and defaults to 8, matching testnet-conway. Shard
+assignment is internal to each validator — `hash(validator_public_key, chain_id)
+% num_shards` — so the count is a capacity choice, not something the network
+agrees on. Different validators can and do run different numbers.
+
+`deploy-validator.sh` writes both `NUM_SHARDS` and the matching
+`COMPOSE_PROFILES` into `.env`. Shards 0–3 have no profile and always run; 4–7
+are enabled by their profile, so a deployment that predates this and has no
+`COMPOSE_PROFILES` keeps the four it already had.
+
+**The count is fixed once you deploy.** It lives in `server.json`, which also
+holds your signing key and is never regenerated — rotating that key would drop
+your validator from the committee. So `deploy-validator.sh` reads the count back
+out of `server.json` on every re-run and refuses a `--num-shards` that
+disagrees, rather than starting shards that index past the end of the list
+`server.json` still holds. Those shards panic on boot.
+
+Growing an existing validator therefore means regenerating the network half of
+`server.json` while preserving `validator_secret`, then restarting the stack.
+There is no supported automation for it yet — [open an
+issue](https://github.com/linera-io/linera-artifacts/issues) if you need it and
+we will document the procedure.
+
+Nothing else has to change: Prometheus and Alloy discover shards through the
+Docker daemon and read the index off each container's `linera.shard` label, so
+neither `prometheus.yaml` nor `alloy-config.river` names a shard.
 
 ## Upgrading .env safely
 

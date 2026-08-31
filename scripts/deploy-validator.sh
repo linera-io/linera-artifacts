@@ -23,9 +23,10 @@
 #   --client-image REF  Override the linera-client image reference. Runs the
 #                       `linera` CLI that shard-init invokes.
 #   --xfs-path PATH     Bind-mount this XFS directory as the ScyllaDB data dir.
-#   --num-shards N      Number of shards in validator-config.toml (default: 4).
-#                       Must match the number of shard-N services in
-#                       docker-compose.yaml.
+#   --num-shards N      Number of shards, 4..8 (default: 8, matching
+#                       testnet-conway). Ignored when server.json already
+#                       exists: that file pins the count, and changing it
+#                       needs a resharding, not a re-run.
 #   --with-alloy        Add Grafana Alloy + cAdvisor; push metrics/
 #                       logs/traces to remote endpoints you set in
 #                       .env (PROMETHEUS_OTLP_URL etc.). What Linera
@@ -58,7 +59,10 @@ readonly DEFAULT_CLIENT_IMAGE_NAME="linera-client"
 readonly DEFAULT_IMAGE_TAG="testnet_conway_release"
 readonly DEFAULT_GENESIS_BUCKET="https://storage.googleapis.com/linera-io-dev-public"
 readonly DEFAULT_NETWORK="testnet-conway"
-readonly DEFAULT_NUM_SHARDS=4
+readonly DEFAULT_NUM_SHARDS=8
+# shard-0..3 have no compose profile, so they always run and cannot be
+# switched off. Anything above that is opt-in via COMPOSE_PROFILES.
+readonly MIN_NUM_SHARDS=4
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -113,12 +117,41 @@ validate_num_shards() {
     [[ "$requested" =~ ^[1-9][0-9]*$ ]] || die "--num-shards must be a positive integer, got: ${requested}"
     [[ -f "$compose" ]] || die "Missing ${compose}"
     local available
-    available="$(grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "$compose")"
-    if [[ "$requested" -ne "$available" ]]; then
-        die "--num-shards is ${requested} but docker-compose.yaml defines ${available} shard services.
-  They must match, or the validator will address shards that do not exist.
-  Either pass --num-shards ${available}, or add/remove shard services in ${compose}."
+    available="$(compose_shard_services)"
+    if (( requested < MIN_NUM_SHARDS || requested > available )); then
+        die "--num-shards is ${requested}; docker-compose.yaml supports ${MIN_NUM_SHARDS}..${available}.
+  shard-0..$((MIN_NUM_SHARDS - 1)) always run; the rest are enabled through COMPOSE_PROFILES.
+  Add more shard-N services in ${compose} to raise the ceiling."
     fi
+}
+
+compose_shard_services() {
+    grep -cE '^[[:space:]]+hostname: docker-shard-[0-9]+$' "${COMPOSE_DIR}/docker-compose.yaml"
+}
+
+# The shard list lives in server.json, and generate_validator_keys refuses to
+# regenerate that file so the signing key survives a re-run. Changing the count
+# on an existing validator therefore leaves server.json behind, and a shard
+# started with an index past its end panics on boot. Treat what is already
+# deployed as authoritative.
+shards_in_server_json() {
+    # `empty` rather than 0, so "no shard list" stays distinguishable from
+    # "zero shards". Errors are NOT swallowed: a failure here must reach the
+    # caller, because falling through to the default migrates a running
+    # validator to a shard count its server.json cannot serve.
+    jq -r 'if .internal_network.shards then .internal_network.shards | length else empty end' \
+        "${COMPOSE_DIR}/server.json"
+}
+
+# COMPOSE_PROFILES is read from .env by docker compose itself. shard-0..3 carry
+# no profile, so only the extras above MIN_NUM_SHARDS are listed.
+shard_profiles_for() {
+    local num_shards="$1" profiles=() i
+    for (( i = MIN_NUM_SHARDS; i < num_shards; i++ )); do
+        profiles+=("shard-${i}")
+    done
+    local IFS=,
+    echo "${profiles[*]}"
 }
 
 # A validator opens many short-lived gRPC/DNS connections. A low
@@ -318,6 +351,7 @@ build_env() {
     set_or_replace LINERA_VALIDATOR_IMAGE "$validator_image"
     set_or_replace LINERA_CLIENT_IMAGE "$client_image"
     set_or_replace NUM_SHARDS "$num_shards"
+    set_or_replace COMPOSE_PROFILES "$(shard_profiles_for "$num_shards")"
 
     # Refresh the deployment metadata block, stripping the previous one by the
     # lines it owns. Deleting through to end-of-file instead would take any
@@ -346,7 +380,7 @@ main() {
         echo "  Use LINERA_VALIDATOR_IMAGE and LINERA_CLIENT_IMAGE instead." >&2
         exit 1
     fi
-    local num_shards="${NUM_SHARDS:-$DEFAULT_NUM_SHARDS}"
+    local num_shards="${NUM_SHARDS:-}"
     local xfs_path="${SCYLLA_XFS_PATH:-}"
     local with_alloy="${WITH_ALLOY:-0}"
     local with_local_monitoring="${WITH_LOCAL_MONITORING:-0}"
@@ -383,6 +417,35 @@ main() {
     [[ -n "$email" ]] || { usage; die "email is required"; }
     validate_host "$host"
     validate_email "$email"
+
+    # An existing server.json pins the count: the default must never migrate a
+    # running validator, and an explicit request that disagrees is refused
+    # rather than applied, because applying it panics every shard past the end
+    # of the list server.json still holds.
+    local deployed_shards=""
+    if [[ -f "${COMPOSE_DIR}/server.json" ]]; then
+        command -v jq >/dev/null 2>&1 \
+            || die "jq is required to read the shard count out of ${COMPOSE_DIR}/server.json.
+  Without it this script cannot tell how many shards you already run.
+  Install jq and re-run."
+        deployed_shards="$(shards_in_server_json)" \
+            || die "Could not read the shard list from ${COMPOSE_DIR}/server.json.
+  It should be the file linera-server generate wrote. Refusing to guess the
+  shard count: guessing wrong starts shards that panic on boot."
+    fi
+    if [[ -n "$deployed_shards" ]]; then
+        if [[ -z "$num_shards" ]]; then
+            num_shards="$deployed_shards"
+            log INFO "Keeping the ${deployed_shards} shards already in server.json."
+        elif [[ "$num_shards" -ne "$deployed_shards" ]]; then
+            die "Requested ${num_shards} shards but server.json describes ${deployed_shards}.
+  Changing the count needs server.json regenerated, which would rotate your
+  signing key and drop this validator from the committee.
+  Re-run without --num-shards to keep ${deployed_shards}, or see
+  docs/DOCKER-COMPOSE.md for the resharding procedure."
+        fi
+    fi
+    [[ -n "$num_shards" ]] || num_shards="$DEFAULT_NUM_SHARDS"
     validate_num_shards "$num_shards"
 
     require_cmd docker

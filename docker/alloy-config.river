@@ -17,34 +17,44 @@ prometheus.scrape "proxy_metrics" {
   scrape_timeout  = "10s"
 }
 
+// Discover the shards instead of listing them, so the shard count is
+// configurable without editing this file. Mirrors the docker_sd_configs block
+// in prometheus.yaml — the two scrape paths must agree on job and shard.
+discovery.relabel "shard_metrics" {
+  targets = discovery.docker.containers.targets
+
+  // Every shard service carries linera.shard; nothing else does.
+  rule {
+    source_labels = ["__meta_docker_container_label_linera_shard"]
+    regex         = ".+"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_network_ip"]
+    target_label  = "__address__"
+    replacement   = "$1:21100"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_linera_shard"]
+    target_label  = "shard"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "linera-shard"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = env("HOSTNAME")
+  }
+}
+
 // Scrape metrics from all shard services
 prometheus.scrape "shard_metrics" {
-  targets = [
-    {
-      __address__ = "docker-shard-1:21100",
-      job         = "linera-shard",
-      shard       = "0",
-      instance    = env("HOSTNAME"),
-    },
-    {
-      __address__ = "docker-shard-2:21100",
-      job         = "linera-shard",
-      shard       = "1",
-      instance    = env("HOSTNAME"),
-    },
-    {
-      __address__ = "docker-shard-3:21100",
-      job         = "linera-shard",
-      shard       = "2",
-      instance    = env("HOSTNAME"),
-    },
-    {
-      __address__ = "docker-shard-4:21100",
-      job         = "linera-shard",
-      shard       = "3",
-      instance    = env("HOSTNAME"),
-    },
-  ]
+  targets = discovery.relabel.shard_metrics.output
 
   forward_to = [otelcol.receiver.prometheus.default.receiver]
 

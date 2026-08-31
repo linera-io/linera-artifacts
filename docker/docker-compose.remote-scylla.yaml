@@ -46,3 +46,16 @@ services:
   shard-3:
     extra_hosts:
       - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
+
+  shard-4:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
+  shard-5:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
+  shard-6:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
+  shard-7:
+    extra_hosts:
+      - "scylla=${SCYLLA_HOST:?set SCYLLA_HOST to the address of your ScyllaDB host}"
