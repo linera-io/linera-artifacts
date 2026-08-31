@@ -19,6 +19,73 @@ Release channels:
 
 ---
 
+## [0.2.3] — 2026-08-31
+
+Compose-stack release; no chart templates or values changed since 0.2.2.
+Everything below concerns `docker/`, `scripts/` and the monitoring the
+compose stack ships.
+
+### Fixed
+
+- **`deploy-validator.sh` aborted with `linera_image: unbound variable`.**
+  The single `linera` image was split upstream into `linera-validator` and
+  `linera-client`, and one reference to the old variable survived. Every
+  deployment on 0.2.0 through 0.2.2 hit this — use this release or later.
+- **Watchtower was updating every container on the host.** It ran without
+  `--label-enable`, which is the flag that makes
+  `com.centurylinklabs.watchtower.enable` mean anything, so the labels on the
+  proxy and shards were decorative. ScyllaDB was spared only because
+  `SCYLLA_IMAGE` pins an immutable tag.
+- **The shards had no healthcheck.** Only `scylla` and `proxy` did, so with
+  `restart: unless-stopped` Docker restarted a shard only when its process
+  exited — a shard that stayed up and failed every request was never noticed.
+  They now carry the same TCP probe and timings as the chart's shard
+  `livenessProbe`.
+- **Every alert in `docker/alerts.rules.yaml` was dead.** Four selected job
+  names the scrape config never produced (`shards`/`proxy` rather than
+  `linera-shard`/`linera-proxy`; PromQL anchors `=~`), one queried a metric
+  that does not exist, and ScyllaDB was not scraped at all. A silent alert set
+  read as a healthy validator. ScyllaDB is now a scrape target on its default
+  Prometheus port, and CI checks that every rule's job selector resolves
+  against the scrape config — `promtool check rules` passes on a rule that
+  selects a job nobody scrapes, which is how these shipped.
+- **`LineraProxyHighLatency` used the wrong unit.** `proxy_request_latency` is
+  recorded in milliseconds, so the threshold is 2000, not 2.
+
+### Changed
+
+- **The shard count is configurable and now defaults to 8**, matching
+  testnet-conway; it was fixed at 4. `--num-shards` takes 4–8 and
+  `deploy-validator.sh` writes the matching `COMPOSE_PROFILES`.
+
+  **Existing deployments are unaffected.** Shards 0–3 carry no profile, so a
+  stack that predates this keeps the four it already ran. The count lives in
+  `server.json`, which is never regenerated (that would rotate your signing
+  key), so the script reads it back from there on every re-run and refuses a
+  `--num-shards` that disagrees rather than starting shards that panic on
+  boot. Growing an existing validator is a resharding — see
+  [Changing the shard count](docs/DOCKER-COMPOSE.md#changing-the-shard-count).
+- **Prometheus and Alloy discover shards through the Docker daemon** instead
+  of listing them, reading the index from each container's new `linera.shard`
+  label. Neither file names a shard, so neither alerts on shards a smaller
+  deployment does not run. Prometheus now mounts the Docker socket read-only.
+- **ScyllaDB drains before it stops.** A `pre_stop` hook runs `nodetool drain`
+  and `stop_grace_period` rises to 900s, mirroring what scylla-operator does
+  on Kubernetes. Docker's 10s default was forcing a SIGKILL mid-flush.
+- Hardware guidance now budgets 8 shards at 6 GiB rather than 4 at 12 GiB.
+  The total is the same 48 GiB, so the reference box is still 16 cores /
+  128 GB.
+
+### Added
+
+- End-to-end tests for `deploy-validator.sh` that run it for real against a
+  stubbed docker and assert the files it writes. `--dry-run` returns early
+  from the three functions that produce a validator's config, so a dry-run
+  smoke test could not see a wrong image or a mangled `.env` — both of which
+  shipped under exactly that gap.
+- CI: `promtool` on the rule files, rule-selector resolution, and shellcheck
+  over every tracked script rather than a glob that matched nothing.
+
 ## [Unreleased]
 
 Initial public release. This section will be dated and versioned on
